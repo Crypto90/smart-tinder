@@ -1,0 +1,1188 @@
+// ============================================================================
+// SmartTinder V2 - Automation, Criteria Filter Engine & Modern Glassmorphic UI
+// ============================================================================
+
+(function () {
+  let uiInjected = false;
+  let initTimer = null;
+
+  function initSmartTinder() {
+    if (uiInjected || document.getElementById('st-wrapper')) return;
+    if (!document.body) return;
+
+    uiInjected = true;
+    if (initTimer) clearInterval(initTimer);
+
+    // --- 1. Persistent Storage & State Management ---
+    function getStored(key, defaultVal) {
+      try {
+        const item = localStorage.getItem(key);
+        return item !== null ? JSON.parse(item) : defaultVal;
+      } catch (e) {
+        return defaultVal;
+      }
+    }
+
+    function setStored(key, val) {
+      try {
+        localStorage.setItem(key, JSON.stringify(val));
+      } catch (e) {}
+    }
+
+    // Config stored in localStorage (persistent across browser sessions)
+    let speed = parseFloat(getStored('st-speed', 1.5));
+    let randDelay = parseFloat(getStored('st-rand', 1.0));
+    let maxSwipesPerCat = parseInt(getStored('st-limit', 50), 10);
+    let passRate = parseInt(getStored('st-passRate', 0), 10); // 0% means 100% Right Swipes on passing profiles
+    let autoLoop = getStored('st-autoLoop', true);
+    let maxDistance = parseInt(getStored('st-maxDist', 0), 10); // 0 = disabled
+    let savedCategories = getStored('st-categories', []);
+    let enabledCats = getStored('st-enabledCats', ['/app/recs']);
+    let isCompact = getStored('st-compact', false);
+    let isCollapsed = getStored('st-collapsed', false);
+    let savedPos = getStored('st-pos', { top: 20, left: 20 });
+
+    // Preset exclusion groups (auto-swipes left if matched in bio, tags, pronouns)
+    const PRESET_GROUPS = [
+      {
+        title: 'Gender & Pronouns',
+        icon: '⚧️',
+        tags: ['he/him', 'they/them', 'er/ihn', 'she/they', 'trans', 'transgender', 'ladyboy', 'crossdresser', 't-girl', 'shemale', 'ftm', 'mtf']
+      },
+      {
+        title: 'Couples & Poly',
+        icon: '👥',
+        tags: ['couple', 'looking for third', 'dreier', 'paar', 'unicorn']
+      },
+      {
+        title: 'Promo & Spam',
+        icon: '💸',
+        tags: ['onlyfans', 'cashapp', 'paypal.me', 'sugar baby', 'insta:', 'ig:']
+      }
+    ];
+    const allPresetTags = PRESET_GROUPS.flatMap(g => g.tags);
+    const defaultKeywords = [...allPresetTags];
+    let savedKeywords = getStored('st-keywords', defaultKeywords);
+
+    // Session-based state (resets on fresh session, preserved on category reload)
+    let isLiking = sessionStorage.getItem('st-isLiking') === 'true';
+    let likeCount = parseInt(sessionStorage.getItem('st-likeCount') || '0', 10);
+    let passCount = parseInt(sessionStorage.getItem('st-passCount') || '0', 10);
+    let currentQueue = JSON.parse(sessionStorage.getItem('st-queue') || '[]');
+    let currentCategorySwipes = parseInt(sessionStorage.getItem('st-catSwipes') || '0', 10);
+    
+    // Runtime execution variables
+    let activeTimeoutId = null;
+    let emptySwipeCount = 0;
+    let loopHasProfiles = false;
+    let lastProfileIdentifier = '';
+
+    // --- 2. Build Glassmorphic UI ---
+    const overlayHTML = `
+      <style>
+        #st-wrapper *, #st-wrapper *::before, #st-wrapper *::after { box-sizing: border-box; }
+        #st-body::-webkit-scrollbar, #st-kw-list::-webkit-scrollbar, #st-cat-list::-webkit-scrollbar { width: 5px; }
+        #st-body::-webkit-scrollbar-track, #st-kw-list::-webkit-scrollbar-track, #st-cat-list::-webkit-scrollbar-track { background: rgba(0,0,0,0.25); border-radius: 4px; }
+        #st-body::-webkit-scrollbar-thumb, #st-kw-list::-webkit-scrollbar-thumb, #st-cat-list::-webkit-scrollbar-thumb { background: rgba(253,41,123,0.5); border-radius: 4px; }
+        #st-body::-webkit-scrollbar-thumb:hover, #st-kw-list::-webkit-scrollbar-thumb:hover, #st-cat-list::-webkit-scrollbar-thumb:hover { background: rgba(253,41,123,0.8); }
+      </style>
+      <div id="st-wrapper" style="
+        position: fixed; top: ${savedPos.top}px; left: ${savedPos.left}px; width: 330px;
+        background: rgba(18, 20, 32, 0.94); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+        border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 14px;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6); color: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
+        z-index: 999999; display: flex; flex-direction: column; overflow: hidden; user-select: none;
+        max-height: calc(100vh - 40px); transition: width 0.25s ease, opacity 0.2s ease;
+      ">
+        <!-- Compact Bar (Shown only in Compact Mode) -->
+        <div id="st-compact-bar" style="display: ${isCompact ? 'flex' : 'none'}; align-items: center; justify-content: space-between; padding: 8px 12px; background: linear-gradient(135deg, rgba(253, 41, 123, 0.85), rgba(255, 101, 91, 0.85)); flex-shrink: 0;">
+          <div style="font-weight: 800; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+            <span>🔥</span>
+            <span id="st-compact-likes" style="font-size: 13px;">${likeCount}</span>
+            <span style="opacity: 0.6; font-size: 10px;">L</span>
+            <span style="opacity: 0.4;">|</span>
+            <span id="st-compact-passes" style="font-size: 13px; color: #ff9e9e;">${passCount}</span>
+            <span style="opacity: 0.6; font-size: 10px;">P</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button id="st-compact-toggle-run" title="Start / Stop" style="background: rgba(0,0,0,0.25); border: none; border-radius: 4px; color: #fff; font-size: 12px; padding: 2px 6px; cursor: pointer;">
+              ${isLiking ? '⏸️' : '▶️'}
+            </button>
+            <button id="st-expand-btn" title="Expand Widget" style="background: none; border: none; color: #fff; font-size: 14px; cursor: pointer; padding: 0 2px;">❐</button>
+          </div>
+        </div>
+
+        <!-- Full UI Content -->
+        <div id="st-full-ui" style="display: ${isCompact ? 'none' : 'flex'}; flex-direction: column; flex: 1; min-height: 0; overflow: hidden;">
+          <!-- Draggable Header -->
+          <div id="st-header" style="
+            padding: 10px 12px; background: linear-gradient(135deg, rgba(253, 41, 123, 0.9), rgba(255, 101, 91, 0.9));
+            cursor: grab; font-weight: 700; font-size: 13px; display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1); flex-shrink: 0;
+          ">
+            <span style="display: flex; align-items: center; gap: 6px;">
+              <span>🔥</span>
+              <span>Smart Tinder</span>
+            </span>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <button id="st-devtools-btn" title="Toggle Developer Console (F12 or Cmd+Option+I)" style="background: none; border: none; color: white; cursor: pointer; font-size: 11px; padding: 0 2px; opacity: 0.7;">🛠️</button>
+              <button id="st-compact-btn" title="Compact Mode" style="background: none; border: none; color: white; cursor: pointer; font-size: 12px; padding: 0 3px; opacity: 0.9;">🗕</button>
+              <button id="st-collapse" title="Minimize Body" style="background: none; border: none; color: white; cursor: pointer; font-size: 12px; padding: 0 3px; opacity: 0.9;">${isCollapsed ? '▲' : '▼'}</button>
+            </div>
+          </div>
+          
+          <!-- Tab Navigation Bar -->
+          <div id="st-tabs" style="display: flex; background: rgba(0,0,0,0.35); border-bottom: 1px solid rgba(255,255,255,0.08); flex-shrink: 0;">
+            <button id="st-tab-main" style="flex: 1; padding: 8px 10px; background: rgba(255,255,255,0.08); border: none; border-bottom: 2px solid #fd297b; color: #fff; font-size: 11px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; transition: all 0.2s;">
+              <span>⚡ Swiper</span>
+            </button>
+            <button id="st-tab-criteria" style="flex: 1; padding: 8px 10px; background: transparent; border: none; border-bottom: 2px solid transparent; color: rgba(255,255,255,0.6); font-size: 11px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s;">
+              <span>🛡️ Criteria</span>
+              <span id="st-tab-badge" style="font-size: 9px; background: #fd297b; color: white; padding: 1px 6px; border-radius: 10px; font-weight: bold;">${savedKeywords.length}</span>
+            </button>
+          </div>
+          
+          <!-- Scrollable Body -->
+          <div id="st-body" style="padding: 12px; display: ${isCollapsed ? 'none' : 'flex'}; flex-direction: column; overflow-y: auto; overflow-x: hidden; flex: 1; min-height: 0;">
+            
+            <!-- PANEL 1: MAIN SWIPER CONTROLS -->
+            <div id="st-panel-main" style="display: flex; flex-direction: column; gap: 10px;">
+              <!-- Counters Row -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 8px; text-align: center;">
+                <div>
+                  <div style="font-size: 10px; color: rgba(255,255,255,0.6); text-transform: uppercase; letter-spacing: 0.5px;">Likes</div>
+                  <div id="st-counter" style="font-size: 18px; font-weight: 800; color: #4ade80;">${likeCount}</div>
+                </div>
+                <div style="border-left: 1px solid rgba(255,255,255,0.08);">
+                  <div style="font-size: 10px; color: rgba(255,255,255,0.6); text-transform: uppercase; letter-spacing: 0.5px;">Passes</div>
+                  <div id="st-pass-counter" style="font-size: 18px; font-weight: 800; color: #f87171;">${passCount}</div>
+                </div>
+              </div>
+
+              <!-- Category Progress -->
+              <div style="background: rgba(0,0,0,0.25); border-radius: 6px; padding: 6px 8px; font-size: 10px; display: flex; justify-content: space-between; align-items: center;">
+                <span style="color: rgba(255,255,255,0.7);">Cat Swipes:</span>
+                <span id="st-cat-progress" style="font-weight: 700; color: #fd297b;">${currentCategorySwipes} / ${maxSwipesPerCat}</span>
+              </div>
+
+              <!-- Action Buttons -->
+              <div style="display: flex; gap: 6px;">
+                <button id="st-start" style="flex: 1; padding: 8px; background: ${isLiking ? 'rgba(255,255,255,0.1)' : 'linear-gradient(45deg, #00C853, #64DD17)'}; border: none; border-radius: 6px; color: #fff; font-weight: bold; font-size: 11px; cursor: pointer; box-shadow: ${isLiking ? 'none' : '0 4px 12px rgba(0,200,83,0.3)'};" ${isLiking ? 'disabled' : ''}>START</button>
+                <button id="st-stop" style="flex: 1; padding: 8px; background: ${isLiking ? 'rgba(255, 75, 75, 0.25)' : 'rgba(255, 255, 255, 0.1)'}; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: ${isLiking ? '#ff4b4b' : '#fff'}; font-weight: bold; font-size: 11px; cursor: pointer;" ${!isLiking ? 'disabled' : ''}>STOP</button>
+              </div>
+              
+              <!-- Automation Sliders -->
+              <div style="display: flex; flex-direction: column; gap: 8px; background: rgba(255,255,255,0.03); padding: 8px; border-radius: 8px;">
+                <div style="display: flex; flex-direction: column; gap: 3px;">
+                  <label style="font-size: 10px; color: rgba(255,255,255,0.8); display: flex; justify-content: space-between;">
+                    <span>Base Speed</span>
+                    <span id="st-speed-val" style="font-weight: bold; color: #fd297b;">${speed}s</span>
+                  </label>
+                  <input type="range" id="st-speed" min="0.5" max="5.0" step="0.1" value="${speed}" style="accent-color: #fd297b; height: 4px; cursor: pointer;">
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 3px;">
+                  <label style="font-size: 10px; color: rgba(255,255,255,0.8); display: flex; justify-content: space-between;">
+                    <span>Random Jitter</span>
+                    <span id="st-rand-val" style="font-weight: bold; color: #fd297b;">${randDelay}s</span>
+                  </label>
+                  <input type="range" id="st-rand" min="0" max="3.0" step="0.1" value="${randDelay}" style="accent-color: #fd297b; height: 4px; cursor: pointer;">
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 3px;">
+                  <label style="font-size: 10px; color: rgba(255,255,255,0.8); display: flex; justify-content: space-between;">
+                    <span>Category Limit</span>
+                    <span id="st-limit-val" style="font-weight: bold; color: #fd297b;">${maxSwipesPerCat}</span>
+                  </label>
+                  <input type="range" id="st-limit" min="10" max="250" step="10" value="${maxSwipesPerCat}" style="accent-color: #fd297b; height: 4px; cursor: pointer;">
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 3px;">
+                  <label style="font-size: 10px; color: rgba(255,255,255,0.8); display: flex; justify-content: space-between;">
+                    <span>Random Pass Rate</span>
+                    <span id="st-pass-val" style="font-weight: bold; color: #fd297b;">${passRate}%</span>
+                  </label>
+                  <input type="range" id="st-passrate" min="0" max="50" step="5" value="${passRate}" style="accent-color: #fd297b; height: 4px; cursor: pointer;">
+                  <span style="font-size: 9px; color: rgba(255,255,255,0.5);">0% = 100% Right Swipes on passing profiles</span>
+                </div>
+              </div>
+
+              <!-- Quick Link Card to Criteria -->
+              <div id="st-open-criteria" style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px 10px; cursor: pointer;">
+                <div>
+                  <div style="font-size: 11px; font-weight: bold; color: #fff; display: flex; align-items: center; gap: 6px;">
+                    <span>🛡️ Negative Criteria</span>
+                    <span id="st-filter-count" style="font-size: 9px; background: rgba(253,41,123,0.3); color: #fd297b; padding: 1px 6px; border-radius: 6px; font-weight: bold;">${savedKeywords.length} active</span>
+                  </div>
+                  <div style="font-size: 9px; color: rgba(255,255,255,0.5); margin-top: 2px;">Click to manage preset tags & custom words</div>
+                </div>
+                <span style="font-size: 10px; color: #fd297b; font-weight: bold;">Manage →</span>
+              </div>
+
+              <!-- Auto-Loop Toggle -->
+              <label style="font-size: 11px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input type="checkbox" id="st-autoloop" ${autoLoop ? 'checked' : ''} style="accent-color: #fd297b; cursor: pointer;"> Auto-Loop Categories
+              </label>
+
+              <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 2px 0;">
+              
+              <!-- Explore Categories Section -->
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="font-size: 10px; font-weight: bold; text-transform: uppercase; color: rgba(255,255,255,0.8);">Categories</div>
+                <div style="display: flex; gap: 4px;">
+                  <button id="st-select-all" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 3px; font-size: 8px; padding: 2px 5px; cursor: pointer;">All</button>
+                  <button id="st-deselect-all" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 3px; font-size: 8px; padding: 2px 5px; cursor: pointer;">None</button>
+                  <button id="st-scan" style="background: rgba(253,41,123,0.3); border: 1px solid rgba(253,41,123,0.5); color: white; border-radius: 3px; font-size: 8px; padding: 2px 5px; cursor: pointer;">Scan</button>
+                </div>
+              </div>
+              
+              <div id="st-cat-list" style="display: flex; flex-direction: column; gap: 5px; font-size: 10px; max-height: 100px; overflow-y: auto; padding-right: 4px;">
+                <!-- Dynamically populated -->
+              </div>
+
+              <!-- Queue Indicators -->
+              <div style="background: rgba(0,0,0,0.35); border-radius: 6px; padding: 6px 8px; font-size: 9px; color: #ccc;">
+                <div style="margin-bottom: 3px;"><strong style="color:#fff;">Active:</strong> <span id="st-current-queue" style="color:#fd297b; font-weight: bold;">None</span></div>
+                <div><strong style="color:#fff;">Next:</strong> <span id="st-next-queue">None</span></div>
+              </div>
+
+              <!-- Status Display -->
+              <div id="st-status" style="text-align: center; font-size: 10px; color: rgba(255,255,255,0.6); font-style: italic; min-height: 14px; word-break: break-word;">
+                ${isLiking ? 'Running...' : 'Ready.'}
+              </div>
+
+              <!-- Reset Counter Button -->
+              <button id="st-reset-counters" style="background: none; border: none; color: rgba(255,255,255,0.3); font-size: 9px; text-decoration: underline; cursor: pointer; padding: 2px;">Reset counters</button>
+            </div>
+
+            <!-- PANEL 2: DEDICATED CRITERIA MANAGER -->
+            <div id="st-panel-criteria" style="display: none; flex-direction: column; gap: 10px;">
+              <div style="font-size: 10px; color: rgba(255,255,255,0.7); line-height: 1.4; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 8px 10px;">
+                Auto-swipes <strong>LEFT (Pass)</strong> if matched in profile bio, tags, pronouns, or details. Click any preset pill to toggle ON / OFF:
+              </div>
+
+              <!-- Presets Header & Action Buttons -->
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 10px; font-weight: bold; color: rgba(255,255,255,0.8); text-transform: uppercase; letter-spacing: 0.5px;">Presets</span>
+                <div style="display: flex; gap: 4px;">
+                  <button id="st-kw-all" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #fff; font-size: 9px; padding: 3px 7px; cursor: pointer;">All</button>
+                  <button id="st-kw-none" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #fff; font-size: 9px; padding: 3px 7px; cursor: pointer;">None</button>
+                  <button id="st-kw-reset" style="background: rgba(253,41,123,0.25); border: 1px solid rgba(253,41,123,0.45); border-radius: 4px; color: #fff; font-size: 9px; padding: 3px 7px; cursor: pointer; font-weight: bold;">Reset</button>
+                </div>
+              </div>
+
+              <!-- Preset Groups Container (Natural full height) -->
+              <div id="st-preset-groups" style="display: flex; flex-direction: column; gap: 8px;">
+                <!-- Dynamically populated preset pills -->
+              </div>
+
+              <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.08); margin: 2px 0;">
+
+              <!-- Custom Keywords Section -->
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <span style="font-size: 10px; font-weight: bold; color: rgba(255,255,255,0.8); text-transform: uppercase; letter-spacing: 0.5px;">Custom Keywords</span>
+                <div id="st-custom-kw-list" style="display: flex; flex-wrap: wrap; gap: 4px; min-height: 20px;">
+                  <!-- Dynamically populated custom chips -->
+                </div>
+                <div style="display: flex; gap: 5px;">
+                  <input type="text" id="st-kw-input" placeholder="Add custom keyword..." style="flex: 1; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15); border-radius: 5px; color: white; font-size: 10px; padding: 5px 8px;">
+                  <button id="st-kw-add" style="background: #fd297b; border: none; border-radius: 5px; color: white; font-size: 10px; font-weight: bold; padding: 5px 10px; cursor: pointer;">+ Add</button>
+                </div>
+              </div>
+
+              <!-- Distance Limit -->
+              <div style="display: flex; align-items: center; justify-content: space-between; font-size: 10px; color: rgba(255,255,255,0.8); background: rgba(0,0,0,0.25); padding: 6px 8px; border-radius: 6px;">
+                <span>Max Distance (km):</span>
+                <input type="number" id="st-max-dist" min="0" max="500" step="5" value="${maxDistance}" placeholder="0 = off" style="width: 60px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: white; font-size: 10px; padding: 4px 6px; text-align: center;">
+              </div>
+
+              <button id="st-back-to-swiper" style="width: 100%; padding: 8px; background: linear-gradient(135deg, rgba(253, 41, 123, 0.85), rgba(255, 101, 91, 0.85)); border: none; border-radius: 6px; color: white; font-size: 11px; font-weight: bold; cursor: pointer; margin-top: 4px; box-shadow: 0 4px 12px rgba(253,41,123,0.3);">✓ Done (Back to Swiper)</button>
+            </div>
+        </div>
+      </div>
+    `;
+
+    const container = document.createElement('div');
+    container.innerHTML = overlayHTML;
+    document.body.appendChild(container);
+
+    // --- 3. DOM References ---
+    const wrapper = document.getElementById('st-wrapper');
+    const fullUi = document.getElementById('st-full-ui');
+    const compactBar = document.getElementById('st-compact-bar');
+    const header = document.getElementById('st-header');
+    const bodyEl = document.getElementById('st-body');
+    const devtoolsBtn = document.getElementById('st-devtools-btn');
+    const collapseBtn = document.getElementById('st-collapse');
+    const compactBtn = document.getElementById('st-compact-btn');
+    const expandBtn = document.getElementById('st-expand-btn');
+    const compactToggleRun = document.getElementById('st-compact-toggle-run');
+    const compactLikes = document.getElementById('st-compact-likes');
+    const compactPasses = document.getElementById('st-compact-passes');
+
+    const counterEl = document.getElementById('st-counter');
+    const passCounterEl = document.getElementById('st-pass-counter');
+    const catProgressEl = document.getElementById('st-cat-progress');
+    const speedEl = document.getElementById('st-speed');
+    const speedValEl = document.getElementById('st-speed-val');
+    const randEl = document.getElementById('st-rand');
+    const randValEl = document.getElementById('st-rand-val');
+    const limitEl = document.getElementById('st-limit');
+    const limitValEl = document.getElementById('st-limit-val');
+    const passRateEl = document.getElementById('st-passrate');
+    const passRateValEl = document.getElementById('st-pass-val');
+    const loopToggle = document.getElementById('st-autoloop');
+
+    const tabMainBtn = document.getElementById('st-tab-main');
+    const tabCriteriaBtn = document.getElementById('st-tab-criteria');
+    const tabBadgeEl = document.getElementById('st-tab-badge');
+    const panelMain = document.getElementById('st-panel-main');
+    const panelCriteria = document.getElementById('st-panel-criteria');
+    const openCriteriaBtn = document.getElementById('st-open-criteria');
+    const backToSwiperBtn = document.getElementById('st-back-to-swiper');
+    const filterCount = document.getElementById('st-filter-count');
+    const presetGroupsEl = document.getElementById('st-preset-groups');
+    const customKwListEl = document.getElementById('st-custom-kw-list');
+    const kwInput = document.getElementById('st-kw-input');
+    const kwAddBtn = document.getElementById('st-kw-add');
+    const kwSelectAllBtn = document.getElementById('st-kw-all');
+    const kwSelectNoneBtn = document.getElementById('st-kw-none');
+    const kwResetBtn = document.getElementById('st-kw-reset');
+    const maxDistInput = document.getElementById('st-max-dist');
+
+    const startBtn = document.getElementById('st-start');
+    const stopBtn = document.getElementById('st-stop');
+    const scanBtn = document.getElementById('st-scan');
+    const selectAllBtn = document.getElementById('st-select-all');
+    const deselectAllBtn = document.getElementById('st-deselect-all');
+    const catList = document.getElementById('st-cat-list');
+    const currentQueueEl = document.getElementById('st-current-queue');
+    const nextQueueEl = document.getElementById('st-next-queue');
+    const statusEl = document.getElementById('st-status');
+    const resetCountersBtn = document.getElementById('st-reset-counters');
+
+    // --- 4. Queue Helpers ---
+    function formatQueueName(name) {
+      if (name === '/app/recs') return 'Normal Recs';
+      return name;
+    }
+
+    function updateQueueVisuals() {
+      if (!isLiking || currentQueue.length === 0) {
+        currentQueueEl.textContent = 'None';
+        nextQueueEl.textContent = 'None';
+        return;
+      }
+      currentQueueEl.textContent = formatQueueName(currentQueue[0]);
+      if (currentQueue.length > 1) {
+        nextQueueEl.textContent = formatQueueName(currentQueue[1]);
+      } else if (autoLoop) {
+        nextQueueEl.textContent = '(Restart Loop)';
+      } else {
+        nextQueueEl.textContent = '(End of Queue)';
+      }
+    }
+
+    // --- 5. Render Keywords (Presets & Custom) ---
+    function renderKeywords() {
+      if (!presetGroupsEl || !customKwListEl) return;
+      presetGroupsEl.innerHTML = '';
+      customKwListEl.innerHTML = '';
+      if (filterCount) filterCount.textContent = `${savedKeywords.length} active`;
+      if (tabBadgeEl) tabBadgeEl.textContent = savedKeywords.length;
+
+      // 1. Render Preset Groups
+      PRESET_GROUPS.forEach(group => {
+        const grp = document.createElement('div');
+        grp.style = "background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 7px 8px; display: flex; flex-direction: column; gap: 5px;";
+
+        const activeCount = group.tags.filter(t => savedKeywords.includes(t)).length;
+
+        const title = document.createElement('div');
+        title.style = "font-size: 10px; color: rgba(255,255,255,0.7); display: flex; justify-content: space-between; align-items: center; font-weight: 600;";
+        title.innerHTML = `<span>${group.icon} ${group.title}</span> <span style="font-size: 9px; color: #fd297b; font-weight: bold;">${activeCount}/${group.tags.length}</span>`;
+        grp.appendChild(title);
+
+        const pills = document.createElement('div');
+        pills.style = "display: flex; flex-wrap: wrap; gap: 4px;";
+
+        group.tags.forEach(tag => {
+          const isActive = savedKeywords.includes(tag);
+          const pill = document.createElement('button');
+          pill.style = isActive
+            ? "background: linear-gradient(135deg, rgba(253, 41, 123, 0.45), rgba(255, 101, 91, 0.45)); border: 1px solid #fd297b; border-radius: 12px; padding: 3px 8px; font-size: 10px; color: #fff; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.15s ease;"
+            : "background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; padding: 3px 8px; font-size: 10px; color: rgba(255, 255, 255, 0.45); cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.15s ease;";
+          
+          pill.innerHTML = isActive 
+            ? `<span style="color: #4ade80; font-size: 9px; font-weight: bold;">✓</span> <span>${tag}</span>` 
+            : `<span style="opacity: 0.5; font-size: 9px;">+</span> <span>${tag}</span>`;
+
+          pill.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (isActive) {
+              savedKeywords = savedKeywords.filter(k => k !== tag);
+            } else {
+              savedKeywords.push(tag);
+            }
+            setStored('st-keywords', savedKeywords);
+            renderKeywords();
+          });
+
+          pills.appendChild(pill);
+        });
+
+        grp.appendChild(pills);
+        presetGroupsEl.appendChild(grp);
+      });
+
+      // 2. Render Custom Keywords
+      const allPresets = PRESET_GROUPS.flatMap(g => g.tags);
+      const customTags = savedKeywords.filter(k => !allPresets.includes(k));
+
+      if (customTags.length === 0) {
+        customKwListEl.innerHTML = '<span style="font-size: 9px; color: rgba(255,255,255,0.3); font-style: italic;">No custom keywords added</span>';
+      } else {
+        customTags.forEach(ctag => {
+          const chip = document.createElement('span');
+          chip.style = "background: rgba(253, 41, 123, 0.25); border: 1px solid rgba(253, 41, 123, 0.5); border-radius: 12px; padding: 3px 8px; font-size: 10px; display: inline-flex; align-items: center; gap: 5px; color: #fff;";
+          chip.innerHTML = `${ctag} <span data-del="${ctag}" style="cursor: pointer; opacity: 0.7; font-weight: bold; padding: 0 2px;">&times;</span>`;
+          customKwListEl.appendChild(chip);
+        });
+
+        customKwListEl.querySelectorAll('span[data-del]').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const word = btn.getAttribute('data-del');
+            savedKeywords = savedKeywords.filter(k => k !== word);
+            setStored('st-keywords', savedKeywords);
+            renderKeywords();
+          });
+        });
+      }
+    }
+    renderKeywords();
+
+    kwAddBtn.addEventListener('click', () => {
+      const val = kwInput.value.trim();
+      if (val && !savedKeywords.includes(val)) {
+        savedKeywords.push(val);
+        setStored('st-keywords', savedKeywords);
+        kwInput.value = '';
+        renderKeywords();
+      }
+    });
+
+    kwInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') kwAddBtn.click();
+    });
+
+    kwSelectAllBtn.addEventListener('click', () => {
+      const allPresets = PRESET_GROUPS.flatMap(g => g.tags);
+      allPresets.forEach(t => {
+        if (!savedKeywords.includes(t)) savedKeywords.push(t);
+      });
+      setStored('st-keywords', savedKeywords);
+      renderKeywords();
+    });
+
+    kwSelectNoneBtn.addEventListener('click', () => {
+      const allPresets = PRESET_GROUPS.flatMap(g => g.tags);
+      savedKeywords = savedKeywords.filter(k => !allPresets.includes(k));
+      setStored('st-keywords', savedKeywords);
+      renderKeywords();
+    });
+
+    kwResetBtn.addEventListener('click', () => {
+      savedKeywords = [...defaultKeywords];
+      setStored('st-keywords', savedKeywords);
+      renderKeywords();
+    });
+
+    // Tab Switching Logic
+    let activeTab = getStored('st-activeTab', 'main');
+    function switchTab(tabName) {
+      activeTab = tabName;
+      setStored('st-activeTab', tabName);
+      if (tabName === 'criteria') {
+        panelMain.style.display = 'none';
+        panelCriteria.style.display = 'flex';
+        tabMainBtn.style.background = 'transparent';
+        tabMainBtn.style.borderBottom = '2px solid transparent';
+        tabMainBtn.style.color = 'rgba(255,255,255,0.6)';
+        tabCriteriaBtn.style.background = 'rgba(255,255,255,0.08)';
+        tabCriteriaBtn.style.borderBottom = '2px solid #fd297b';
+        tabCriteriaBtn.style.color = '#fff';
+        renderKeywords();
+      } else {
+        panelCriteria.style.display = 'none';
+        panelMain.style.display = 'flex';
+        tabCriteriaBtn.style.background = 'transparent';
+        tabCriteriaBtn.style.borderBottom = '2px solid transparent';
+        tabCriteriaBtn.style.color = 'rgba(255,255,255,0.6)';
+        tabMainBtn.style.background = 'rgba(255,255,255,0.08)';
+        tabMainBtn.style.borderBottom = '2px solid #fd297b';
+        tabMainBtn.style.color = '#fff';
+      }
+    }
+
+    tabMainBtn.addEventListener('click', () => switchTab('main'));
+    tabCriteriaBtn.addEventListener('click', () => switchTab('criteria'));
+    if (openCriteriaBtn) openCriteriaBtn.addEventListener('click', () => switchTab('criteria'));
+    if (backToSwiperBtn) backToSwiperBtn.addEventListener('click', () => switchTab('main'));
+    switchTab(activeTab);
+
+    if (devtoolsBtn) {
+      devtoolsBtn.addEventListener('click', () => {
+        try {
+          const { ipcRenderer } = require('electron');
+          ipcRenderer.send('st-toggle-devtools');
+        } catch (e) {
+          console.warn('Could not toggle DevTools via IPC:', e);
+        }
+      });
+    }
+
+    maxDistInput.addEventListener('change', (e) => {
+      maxDistance = parseInt(e.target.value || '0', 10);
+      setStored('st-maxDist', maxDistance);
+    });
+
+    // --- 6. Render Categories ---
+    function renderCategories() {
+      catList.innerHTML = '';
+      
+      // Normal Swiping
+      const normalLabel = document.createElement('label');
+      normalLabel.style = "display: flex; align-items: center; gap: 6px; cursor: pointer; color: white; min-height: 16px;";
+      normalLabel.innerHTML = `<input type="checkbox" value="/app/recs" style="accent-color: #fd297b;" ${enabledCats.includes('/app/recs') ? 'checked' : ''}> <strong>Normal Swiping</strong>`;
+      catList.appendChild(normalLabel);
+
+      savedCategories.forEach(cat => {
+        const lbl = document.createElement('label');
+        lbl.style = "display: flex; align-items: center; gap: 6px; cursor: pointer; color: white; min-height: 16px;";
+        lbl.innerHTML = `<input type="checkbox" value="${cat}" style="accent-color: #fd297b;" ${enabledCats.includes(cat) ? 'checked' : ''}> ${cat}`;
+        catList.appendChild(lbl);
+      });
+
+      catList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.addEventListener('change', () => {
+          if (cb.checked) {
+            if (!enabledCats.includes(cb.value)) enabledCats.push(cb.value);
+          } else {
+            enabledCats = enabledCats.filter(u => u !== cb.value);
+          }
+          setStored('st-enabledCats', enabledCats);
+        });
+      });
+    }
+    renderCategories();
+
+    selectAllBtn.addEventListener('click', () => {
+      enabledCats = ['/app/recs', ...savedCategories];
+      setStored('st-enabledCats', enabledCats);
+      renderCategories();
+    });
+
+    deselectAllBtn.addEventListener('click', () => {
+      enabledCats = [];
+      setStored('st-enabledCats', enabledCats);
+      renderCategories();
+    });
+
+    // --- 7. UI Controls & Persistence ---
+    speedEl.addEventListener('input', (e) => {
+      speed = parseFloat(e.target.value);
+      speedValEl.textContent = `${speed}s`;
+      setStored('st-speed', speed);
+    });
+
+    randEl.addEventListener('input', (e) => {
+      randDelay = parseFloat(e.target.value);
+      randValEl.textContent = `${randDelay}s`;
+      setStored('st-rand', randDelay);
+    });
+
+    limitEl.addEventListener('input', (e) => {
+      maxSwipesPerCat = parseInt(e.target.value, 10);
+      limitValEl.textContent = maxSwipesPerCat;
+      catProgressEl.textContent = `${currentCategorySwipes} / ${maxSwipesPerCat}`;
+      setStored('st-limit', maxSwipesPerCat);
+    });
+
+    passRateEl.addEventListener('input', (e) => {
+      passRate = parseInt(e.target.value, 10);
+      passRateValEl.textContent = `${passRate}%`;
+      setStored('st-passRate', passRate);
+    });
+
+    loopToggle.addEventListener('change', (e) => {
+      autoLoop = e.target.checked;
+      setStored('st-autoLoop', autoLoop);
+    });
+
+    resetCountersBtn.addEventListener('click', () => {
+      likeCount = 0;
+      passCount = 0;
+      currentCategorySwipes = 0;
+      sessionStorage.setItem('st-likeCount', '0');
+      sessionStorage.setItem('st-passCount', '0');
+      sessionStorage.setItem('st-catSwipes', '0');
+      counterEl.textContent = '0';
+      passCounterEl.textContent = '0';
+      compactLikes.textContent = '0';
+      compactPasses.textContent = '0';
+      catProgressEl.textContent = `0 / ${maxSwipesPerCat}`;
+      statusEl.textContent = 'Counters reset.';
+    });
+
+    // Dragging
+    let isDragging = false;
+    let dragOffsetX = 0;
+    let dragOffsetY = 0;
+    header.addEventListener('mousedown', (e) => {
+      if (e.target.tagName === 'BUTTON') return;
+      isDragging = true;
+      dragOffsetX = e.clientX - wrapper.getBoundingClientRect().left;
+      dragOffsetY = e.clientY - wrapper.getBoundingClientRect().top;
+      header.style.cursor = 'grabbing';
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      let newLeft = Math.max(0, Math.min(window.innerWidth - wrapper.offsetWidth, e.clientX - dragOffsetX));
+      let newTop = Math.max(10, Math.min(window.innerHeight - 80, e.clientY - dragOffsetY));
+      wrapper.style.left = `${newLeft}px`;
+      wrapper.style.top = `${newTop}px`;
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (isDragging) {
+        isDragging = false;
+        header.style.cursor = 'grab';
+        setStored('st-pos', {
+          left: parseInt(wrapper.style.left, 10) || 20,
+          top: parseInt(wrapper.style.top, 10) || 20
+        });
+      }
+    });
+
+    // Collapse
+    collapseBtn.addEventListener('click', () => {
+      isCollapsed = !isCollapsed;
+      bodyEl.style.display = isCollapsed ? 'none' : 'flex';
+      collapseBtn.textContent = isCollapsed ? '▼' : '▲';
+      setStored('st-collapsed', isCollapsed);
+    });
+
+    // Ensure outer wrapper containers never scroll internally
+    wrapper.addEventListener('scroll', () => { wrapper.scrollTop = 0; wrapper.scrollLeft = 0; });
+    fullUi.addEventListener('scroll', () => { fullUi.scrollTop = 0; fullUi.scrollLeft = 0; });
+
+    // Compact Mode Toggle
+    function setCompactMode(compact) {
+      isCompact = compact;
+      setStored('st-compact', isCompact);
+      if (isCompact) {
+        fullUi.style.display = 'none';
+        compactBar.style.display = 'flex';
+        wrapper.style.width = '190px';
+      } else {
+        compactBar.style.display = 'none';
+        fullUi.style.display = 'flex';
+        wrapper.style.width = '320px';
+      }
+    }
+
+    compactBtn.addEventListener('click', () => setCompactMode(true));
+    expandBtn.addEventListener('click', () => setCompactMode(false));
+    compactToggleRun.addEventListener('click', () => {
+      if (isLiking) stopAutomation();
+      else startAutomation();
+    });
+
+    // --- 8. Modal & Popup Auto-Dismisser ---
+    function dismissPopups() {
+      // 1. Press Escape to close overlay dialogs
+      dispatchKey('Escape', 'Escape', 27);
+
+      let dismissed = false;
+      const buttons = Array.from(document.querySelectorAll('button, a, div[role="button"]'));
+
+      // Text patterns for common dismissal buttons (English & German)
+      const dismissPatterns = [
+        /^keep swiping$/i, /^weiterswipen$/i,
+        /^not now$/i, /^nicht jetzt$/i,
+        /^maybe later$/i, /^später vielleicht$/i, /^später$/i,
+        /^no thanks$/i, /^nein danke$/i,
+        /^i decline$/i, /^ablehnen$/i,
+        /^back to tinder$/i, /^zurück zu tinder$/i,
+        /^agree$/i, /^zustimmen$/i, /^akzeptieren$/i, /^verstanden$/i
+      ];
+
+      for (const btn of buttons) {
+        const text = (btn.innerText || '').trim();
+        const aria = (btn.getAttribute('aria-label') || '').trim();
+
+        const matchesText = dismissPatterns.some(p => p.test(text));
+        const matchesAria = /(close|schließen|schliessen|dismiss|back to tinder|zurück zu tinder)/i.test(aria) && !/(like|nope|pass|super|boost)/i.test(aria);
+
+        if (matchesText || matchesAria) {
+          try {
+            btn.click();
+            dismissed = true;
+          } catch (e) {}
+        }
+      }
+
+      return dismissed;
+    }
+
+    // --- 9. Multi-Language Paywall Detection ---
+    function checkPaywall() {
+      const text = (document.body.innerText || '').toLowerCase();
+      // English & German paywall and out-of-likes strings
+      const isEnglishPaywall = text.includes('out of likes') && (text.includes('get tinder') || text.includes('unlimited likes'));
+      const isGermanPaywall = (text.includes('keine likes mehr') || text.includes('keine likes')) && (text.includes('hol dir tinder') || text.includes('unbegrenzt likes') || text.includes('mehr likes'));
+      return isEnglishPaywall || isGermanPaywall;
+    }
+
+    // --- 10. Profile Criteria Evaluator ---
+    function escapeRegExp(string) {
+      return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function evaluateProfileCriteria() {
+      // Find visible card container
+      const card = document.querySelector('.recCard') ||
+                   document.querySelector('div[aria-hidden="false"]') ||
+                   document.querySelector('#main-content') ||
+                   document.body;
+
+      const profileText = (card ? card.innerText : document.body.innerText) || '';
+      const lowerText = profileText.toLowerCase();
+
+      // Track profile identifier (first 100 chars) to detect card change
+      lastProfileIdentifier = profileText.slice(0, 100);
+
+      // A. Check Negative Keywords / Blacklist (pronouns, identity tags, terms)
+      for (const kw of savedKeywords) {
+        const cleanKw = kw.trim().toLowerCase();
+        if (!cleanKw) continue;
+
+        // Regex with word boundaries for short words or direct match for phrases
+        const hasWordBoundary = /^[a-z0-9]+$/i.test(cleanKw);
+        const matched = hasWordBoundary 
+          ? new RegExp(`(^|\\W)${escapeRegExp(cleanKw)}(\\W|$)`, 'i').test(lowerText)
+          : lowerText.includes(cleanKw);
+
+        if (matched) {
+          return { action: 'PASS', reason: `Negative Criteria: "${kw}"` };
+        }
+      }
+
+      // B. Check Max Distance
+      if (maxDistance > 0) {
+        const distMatch = lowerText.match(/(\d+)\s*(km|kilometers|miles|meilen)\s*(away|entfernt)?/i);
+        if (distMatch) {
+          const dist = parseInt(distMatch[1], 10);
+          if (dist > maxDistance) {
+            return { action: 'PASS', reason: `Distance: ${dist}km > ${maxDistance}km` };
+          }
+        }
+      }
+
+      // C. Random Pass Rate (if user set passRate > 0)
+      if (passRate > 0 && Math.random() * 100 < passRate) {
+        return { action: 'PASS', reason: `Random Pass (${passRate}%)` };
+      }
+
+      // D. All criteria passed -> LIKE
+      return { action: 'LIKE', reason: 'Passed criteria' };
+    }
+
+    // --- 11. Key & Action Dispatchers ---
+    function dispatchKey(key, code, keyCode) {
+      const opts = { key, code, keyCode, which: keyCode, bubbles: true, cancelable: true };
+      const down = new KeyboardEvent('keydown', opts);
+      const up = new KeyboardEvent('keyup', opts);
+
+      if (document.activeElement && document.activeElement !== document.body) {
+        document.activeElement.dispatchEvent(down);
+      }
+      document.body.dispatchEvent(down);
+      window.dispatchEvent(down);
+
+      setTimeout(() => {
+        if (document.activeElement && document.activeElement !== document.body) {
+          document.activeElement.dispatchEvent(up);
+        }
+        document.body.dispatchEvent(up);
+        window.dispatchEvent(up);
+      }, 50);
+    }
+
+    function triggerLike() {
+      dispatchKey('ArrowRight', 'ArrowRight', 39);
+    }
+
+    function triggerPass() {
+      dispatchKey('ArrowLeft', 'ArrowLeft', 37);
+    }
+
+    function clickLikeButtonFallback() {
+      const likeBtn = document.querySelector('button[aria-label*="Like" i]') ||
+                      document.querySelector('button[aria-label*="Gefällt mir" i]') ||
+                      document.querySelector('.button[aria-label*="Like" i]');
+      if (likeBtn) {
+        try { likeBtn.click(); } catch (e) {}
+      }
+    }
+
+    function clickPassButtonFallback() {
+      const passBtn = document.querySelector('button[aria-label*="Nope" i]') ||
+                      document.querySelector('button[aria-label*="Pass" i]') ||
+                      document.querySelector('button[aria-label*="Nicht" i]');
+      if (passBtn) {
+        try { passBtn.click(); } catch (e) {}
+      }
+    }
+
+    // --- 12. Swiping Automation Loop ---
+    function performSwipe() {
+      if (!isLiking) return;
+
+      // Check paywall
+      if (checkPaywall()) {
+        stopAutomation();
+        statusEl.textContent = 'Paywall hit (out of likes). Stopped.';
+        return;
+      }
+
+      // Dismiss any interfering popups
+      dismissPopups();
+
+      // Check for empty stack / beacon radar
+      const isBeaconActive = document.querySelector('.beacon') !== null ||
+                             document.querySelector('div[class*="beacon" i]') !== null;
+      const pageText = (document.body.innerText || '').toLowerCase();
+      const isStackEmptyText = pageText.includes("there's no one new") ||
+                               pageText.includes("niemanden neues") ||
+                               pageText.includes("looking for people");
+
+      if (isBeaconActive || isStackEmptyText) {
+        emptySwipeCount++;
+        statusEl.textContent = `Looking for profiles (${emptySwipeCount}/3)...`;
+        if (emptySwipeCount >= 3) {
+          emptySwipeCount = 0;
+          handleEndOfStack('empty');
+          return;
+        }
+        scheduleNextSwipe(1500);
+        return;
+      }
+
+      // Evaluate profile against criteria
+      const decision = evaluateProfileCriteria();
+      const wasLike = decision.action === 'LIKE';
+
+      if (wasLike) {
+        triggerLike();
+      } else {
+        triggerPass();
+      }
+
+      // Check if card moved after 350ms; if keyboard didn't trigger it, invoke button fallback
+      setTimeout(() => {
+        if (!isLiking) return;
+
+        let currentProfileText = ((document.querySelector('.recCard') || document.body).innerText || '').slice(0, 100);
+        let cardMoved = (currentProfileText !== lastProfileIdentifier) && (lastProfileIdentifier !== '');
+
+        if (!cardMoved) {
+          if (wasLike) clickLikeButtonFallback();
+          else clickPassButtonFallback();
+        }
+
+        // Wait another 350ms to allow card animation / transition to complete
+        setTimeout(() => {
+          if (!isLiking) return;
+
+          currentProfileText = ((document.querySelector('.recCard') || document.body).innerText || '').slice(0, 100);
+          cardMoved = (currentProfileText !== lastProfileIdentifier) && (lastProfileIdentifier !== '');
+
+          if (cardMoved) {
+            emptySwipeCount = 0;
+            if (wasLike) {
+              likeCount++;
+              sessionStorage.setItem('st-likeCount', likeCount);
+              counterEl.textContent = likeCount;
+              compactLikes.textContent = likeCount;
+            } else {
+              passCount++;
+              sessionStorage.setItem('st-passCount', passCount);
+              passCounterEl.textContent = passCount;
+              compactPasses.textContent = passCount;
+            }
+
+            currentCategorySwipes++;
+            sessionStorage.setItem('st-catSwipes', currentCategorySwipes);
+            catProgressEl.textContent = `${currentCategorySwipes} / ${maxSwipesPerCat}`;
+
+            statusEl.textContent = wasLike ? `Liked (${decision.reason})` : `Passed (${decision.reason})`;
+
+            // Check category limit
+            if (currentCategorySwipes >= maxSwipesPerCat && enabledCats.length > 1) {
+              currentCategorySwipes = 0;
+              sessionStorage.setItem('st-catSwipes', '0');
+              statusEl.textContent = 'Category limit reached. Switching...';
+              activeTimeoutId = setTimeout(() => handleEndOfStack('limit'), 1000);
+              return;
+            }
+          } else {
+            emptySwipeCount++;
+            if (emptySwipeCount >= 3) {
+              emptySwipeCount = 0;
+              handleEndOfStack('empty');
+              return;
+            }
+          }
+
+          scheduleNextSwipe();
+        }, 350);
+      }, 350);
+    }
+
+    function scheduleNextSwipe(customDelay = null) {
+      if (!isLiking) return;
+      if (activeTimeoutId) clearTimeout(activeTimeoutId);
+
+      const delayMs = customDelay !== null 
+        ? customDelay 
+        : (speed * 1000) + (Math.random() * (randDelay * 1000));
+
+      statusEl.textContent = `Next in ${(delayMs / 1000).toFixed(1)}s...`;
+      activeTimeoutId = setTimeout(performSwipe, delayMs);
+    }
+
+    // --- 13. Queue & Category Switching ---
+    function handleEndOfStack(reason = 'empty') {
+      if (!isLiking) return;
+      if (activeTimeoutId) clearTimeout(activeTimeoutId);
+
+      if (reason === 'limit') {
+        loopHasProfiles = true;
+      }
+
+      currentQueue.shift();
+      updateQueueVisuals();
+
+      if (currentQueue.length === 0) {
+        if (autoLoop && enabledCats.length > 0) {
+          currentQueue = [...enabledCats];
+          sessionStorage.setItem('st-queue', JSON.stringify(currentQueue));
+          updateQueueVisuals();
+
+          if (loopHasProfiles) {
+            statusEl.textContent = 'Looping categories...';
+            loopHasProfiles = false;
+            activeTimeoutId = setTimeout(() => navigateToItem(currentQueue[0]), 3000);
+          } else {
+            statusEl.textContent = 'All stacks empty. Waiting 5m...';
+            activeTimeoutId = setTimeout(() => navigateToItem(currentQueue[0]), 5 * 60 * 1000);
+          }
+        } else {
+          stopAutomation();
+          statusEl.textContent = 'Queue finished.';
+        }
+      } else {
+        sessionStorage.setItem('st-queue', JSON.stringify(currentQueue));
+        statusEl.textContent = `Switching to ${formatQueueName(currentQueue[0])}...`;
+        activeTimeoutId = setTimeout(() => navigateToItem(currentQueue[0]), 2000);
+      }
+    }
+
+    function navigateToItem(item) {
+      currentCategorySwipes = 0;
+      sessionStorage.setItem('st-catSwipes', '0');
+      catProgressEl.textContent = `0 / ${maxSwipesPerCat}`;
+
+      if (item === '/app/recs') {
+        const recsLink = document.querySelector('a[href="/app/recs"]');
+        if (recsLink) {
+          recsLink.click();
+          activeTimeoutId = setTimeout(() => {
+            if (isLiking) performSwipe();
+          }, 3000);
+        } else {
+          window.location.href = item;
+        }
+        return;
+      }
+
+      // It is an Explore category tile
+      const isCurrentlyExploreRoot = window.location.pathname === '/app/explore';
+      if (!isCurrentlyExploreRoot) {
+        sessionStorage.setItem('st-targetCat', item);
+        const exploreLink = document.querySelector('a[href="/app/explore"]');
+        if (exploreLink) {
+          exploreLink.click();
+          activeTimeoutId = setTimeout(() => diveIntoCategory(item), 3000);
+        } else {
+          window.location.href = '/app/explore';
+        }
+      } else {
+        diveIntoCategory(item);
+      }
+    }
+
+    function diveIntoCategory(catTitle) {
+      statusEl.textContent = `Opening ${catTitle}...`;
+      const buttons = Array.from(document.querySelectorAll('button, a, div[role="button"]'));
+      const targetBtn = buttons.find(b => {
+        const heading = b.querySelector('h3, h2, span');
+        const text = heading ? heading.innerText.trim() : b.innerText.trim();
+        return text === catTitle;
+      });
+
+      if (targetBtn) {
+        targetBtn.click();
+        activeTimeoutId = setTimeout(() => {
+          if (isLiking) {
+            statusEl.textContent = `Swiping in ${catTitle}...`;
+            performSwipe();
+          }
+        }, 4000);
+      } else {
+        statusEl.textContent = `Category "${catTitle}" not found.`;
+        activeTimeoutId = setTimeout(handleEndOfStack, 2500);
+      }
+    }
+
+    // --- 14. Explore Page Auto-Scanner ---
+    function runAutoScan() {
+      statusEl.textContent = 'Scanning categories...';
+      const elements = Array.from(document.querySelectorAll('button, a, div[role="button"]'));
+      let newCats = [];
+
+      elements.forEach(el => {
+        const heading = el.querySelector('h3, h2');
+        if (heading && heading.innerText) {
+          const title = heading.innerText.trim();
+          if (title.length > 2 && !newCats.includes(title)) {
+            newCats.push(title);
+          }
+        }
+      });
+
+      if (newCats.length > 0) {
+        savedCategories = newCats;
+        setStored('st-categories', savedCategories);
+        renderCategories();
+        statusEl.textContent = `Discovered ${newCats.length} categories!`;
+      } else {
+        statusEl.textContent = 'No categories found on this page.';
+      }
+    }
+
+    scanBtn.addEventListener('click', () => {
+      if (!window.location.pathname.includes('/explore')) {
+        statusEl.textContent = 'Navigating to Explore...';
+        sessionStorage.setItem('st-autoScan', 'true');
+        const exploreLink = document.querySelector('a[href="/app/explore"]');
+        if (exploreLink) {
+          exploreLink.click();
+          setTimeout(runAutoScan, 3000);
+        } else {
+          window.location.href = '/app/explore';
+        }
+        return;
+      }
+      runAutoScan();
+    });
+
+    if (sessionStorage.getItem('st-autoScan') === 'true') {
+      sessionStorage.removeItem('st-autoScan');
+      setTimeout(runAutoScan, 3500);
+    }
+
+    // --- 15. Start & Stop Controls ---
+    function startAutomation() {
+      isLiking = true;
+      sessionStorage.setItem('st-isLiking', 'true');
+      if (activeTimeoutId) clearTimeout(activeTimeoutId);
+
+      // Initialize queue if empty
+      if (currentQueue.length === 0) {
+        currentQueue = enabledCats.length > 0 ? [...enabledCats] : ['/app/recs'];
+        sessionStorage.setItem('st-queue', JSON.stringify(currentQueue));
+        loopHasProfiles = false;
+        updateQueueVisuals();
+
+        const firstItem = currentQueue[0];
+        if (firstItem === '/app/recs' && window.location.pathname !== '/app/recs') {
+          navigateToItem(firstItem);
+          return;
+        } else if (firstItem !== '/app/recs' && window.location.pathname !== '/app/explore') {
+          navigateToItem(firstItem);
+          return;
+        }
+      }
+
+      // UI state
+      startBtn.style.background = 'rgba(255, 255, 255, 0.1)';
+      startBtn.style.boxShadow = 'none';
+      startBtn.disabled = true;
+
+      stopBtn.style.background = 'rgba(255, 75, 75, 0.25)';
+      stopBtn.style.color = '#ff4b4b';
+      stopBtn.disabled = false;
+
+      compactToggleRun.textContent = '⏸️';
+      emptySwipeCount = 0;
+      statusEl.textContent = 'Starting swiping engine...';
+      updateQueueVisuals();
+
+      activeTimeoutId = setTimeout(performSwipe, 1800);
+    }
+
+    function stopAutomation() {
+      isLiking = false;
+      sessionStorage.setItem('st-isLiking', 'false');
+      sessionStorage.removeItem('st-queue');
+      currentQueue = [];
+      updateQueueVisuals();
+
+      if (activeTimeoutId) clearTimeout(activeTimeoutId);
+
+      startBtn.style.background = 'linear-gradient(45deg, #00C853, #64DD17)';
+      startBtn.style.boxShadow = '0 4px 12px rgba(0, 200, 83, 0.3)';
+      startBtn.disabled = false;
+
+      stopBtn.style.background = 'rgba(255, 255, 255, 0.1)';
+      stopBtn.style.color = '#fff';
+      stopBtn.disabled = true;
+
+      compactToggleRun.textContent = '▶️';
+      statusEl.textContent = 'Paused.';
+    }
+
+    startBtn.addEventListener('click', startAutomation);
+    stopBtn.addEventListener('click', stopAutomation);
+
+    // --- 16. Category Dive on Page Reload ---
+    const pendingCat = sessionStorage.getItem('st-targetCat');
+    if (pendingCat) {
+      sessionStorage.removeItem('st-targetCat');
+      setTimeout(() => diveIntoCategory(pendingCat), 3500);
+    } else if (isLiking) {
+      // Auto-resume swiping if was active prior to reload
+      setTimeout(() => {
+        if (isLiking) performSwipe();
+      }, 3000);
+    }
+  }
+
+  // Polling to mount on Tinder SPA load
+  initTimer = setInterval(initSmartTinder, 1000);
+  initSmartTinder();
+})();

@@ -1,0 +1,139 @@
+<div align="center">
+
+# 🔥 Smart Tinder
+
+**An intelligent, automated assistant and criteria filter engine for Tinder Web.**  
+Featuring deterministic negative filtering, human-like interaction loops, category rotation, and a sleek glassmorphic HUD.
+
+---
+
+[![Electron](https://img.shields.io/badge/Electron-32.x-47848F?style=for-the-badge&logo=electron&logoColor=white)](https://www.electronjs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey?style=for-the-badge)](https://github.com/)
+[![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
+
+</div>
+
+---
+
+## 🌟 Overview
+
+**Smart Tinder** is a standalone Electron desktop application that wraps Tinder Web with an unobtrusive, floating glassmorphic control widget. It eliminates tedious manual swiping while giving you granular, deterministic control over which profiles you match with.
+
+Instead of blind mass-swiping or random heuristics, Smart Tinder inspects profile content (bios, lifestyle pills, pronouns, relationship intent, and distance) against customizable criteria before dispatching any action.
+
+---
+
+## ✨ Key Features
+
+### 🛡️ Smart Criteria & Negative Filter Engine
+- **Deterministic Left-Swipes**: Automatically passes on profiles that match your exclusion criteria before considering a like.
+- **Categorized Presets (One-Click Toggles)**:
+  - ⚧️ **Gender & Pronouns**: `he/him`, `they/them`, `er/ihn`, `she/they`, `trans`, `transgender`, `ladyboy`, `crossdresser`, `t-girl`, `shemale`, `ftm`, `mtf`
+  - 👥 **Couples & Poly**: `couple`, `looking for third`, `dreier`, `paar`, `unicorn`
+  - 💸 **Promo & Spam**: `onlyfans`, `cashapp`, `paypal.me`, `sugar baby`, `insta:`, `ig:`
+- **Custom Keywords**: Add any custom keyword or phrase with instant chip management.
+- **Maximum Distance Cap**: Set a maximum distance in kilometers (`0` to disable). Profiles exceeding this range are passed automatically.
+- **Configurable Pass Rate**: Random pass rate slider (0% to 50%). Set to `0%` for 100% likes on all passing profiles.
+
+### ⚡ Human-Like Swiping Automation
+- **Natural Timing**: Configurable base speed (0.5s – 5.0s) plus random jitter delays (0.0s – 3.0s) to mimic human rhythm.
+- **Dual-Action Fallback Engine**: Dispatches native keyboard arrow events (`ArrowRight` / `ArrowLeft`) with an automated button-click fallback after 350ms if the DOM card doesn't advance.
+- **Anti-Stall & Popup Dismissal**: Automatically closes match modals (*"Keep Swiping"* / *"Weiterswipen"*), system dialogs (*"Not now"*, *"Nicht jetzt"*), and paywall popups across languages (English & German).
+
+### 🗂️ Explore Category Looping & Queue Management
+- **Category Scanner**: Detects all active Tinder Explore categories (`/app/explore/...`) and lets you select which stacks to swipe.
+- **Category Swipe Limits**: Configurable per-category swipe budget (10 – 250 swipes).
+- **Auto-Loop Mode**: Automatically rotates through selected categories and restarts the queue once exhausted.
+
+### 🎨 Modern Glassmorphic HUD
+- **Tabbed Interface**:
+  - **`⚡ Swiper`**: Real-time Likes/Passes counters, Start/Stop buttons, speed sliders, and category queue progress.
+  - **`🛡️ Criteria`**: Full-height dedicated tag manager with live active badge counts.
+- **Draggable & Dockable**: Move the widget anywhere on screen with boundary clamping; position persists across reloads.
+- **Compact Mode**: Collapse into an ultra-minimal horizontal status bar (`🗕`).
+- **Developer Console Integration**: Clean startup with DevTools hidden by default. Toggle anytime via the `🛠️` header button or standard shortcuts (`F12`, `Cmd+Option+I`).
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- [Node.js](https://nodejs.org/) (v18 or newer recommended)
+- `npm` (bundled with Node.js)
+
+### Installation
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://forgejo.shieldserver.de/Crypto90/smart-tinder.git
+   cd smart-tinder
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+3. **Start the application:**
+   ```bash
+   npm start
+   ```
+
+---
+
+## 🕹️ Usage Guide
+
+1. **Login**: When the window opens, log in to your Tinder account as usual.
+2. **Configure Criteria**:
+   - Click the **`🛡️ Criteria`** tab in the widget.
+   - Click any preset pill to toggle it on (`✓`) or off (`+`).
+   - Add any custom keywords in the text field.
+   - Optionally set a **Max Distance** limit.
+3. **Set Automation Parameters**:
+   - Switch back to the **`⚡ Swiper`** tab.
+   - Adjust **Base Speed** and **Random Jitter**.
+   - If you want 100% likes on passing profiles, set **Random Pass Rate** to `0%`.
+4. **Select Explore Categories (Optional)**:
+   - Click **Scan** under Categories to detect available stacks.
+   - Check the categories you want to include, and toggle **Auto-Loop Categories** if desired.
+5. **Start**: Click **START** to begin. Click **STOP** anytime to pause.
+
+---
+
+## ⌨️ Keyboard Shortcuts
+
+| Shortcut | Description |
+| :--- | :--- |
+| `F12` | Toggle Developer Console / DevTools |
+| `Cmd + Option + I` / `Ctrl + Shift + I` | Toggle Developer Console / DevTools |
+| `Cmd + R` / `Ctrl + R` | Reload Web Session & Reinitialize HUD |
+
+---
+
+## 🏗️ Project Architecture
+
+```
+smart-tinder/
+├── main.js         # Electron main process (lifecycle, window creation, CSP bypass, IPC)
+├── preload.js      # Automation engine, criteria evaluation, DOM injection & HUD
+├── package.json    # Project manifest and scripts
+└── .gitignore      # Git exclusion rules
+```
+
+### Security & Privacy
+- **Direct Web Access**: Connects directly to `https://tinder.com` inside an isolated Chromium web context.
+- **No Third-Party APIs**: All processing (filtering, evaluations, queue management) runs locally on your machine. No telemetry, credentials, or profile data are collected or sent externally.
+- **Persistent Local Storage**: Widget settings and criteria are stored strictly in your local `localStorage`.
+
+---
+
+## 📄 License
+
+This project is licensed under the [MIT License](LICENSE).
+
+---
+
+<div align="center">
+  <sub>Built with ❤️ for intelligent, effortless automation.</sub>
+</div>
