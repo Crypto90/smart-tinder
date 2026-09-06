@@ -1,7 +1,67 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 // Suppress Chromium AudioThreadHangMonitor noise on macOS
 app.commandLine.appendSwitch('disable-features', 'AudioThreadHangMonitor');
+
+// --- Release Update Checker ---
+function isNewerVersion(remote, local) {
+  const rParts = (remote || '').replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
+  const lParts = (local || '').replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(rParts.length, lParts.length); i++) {
+    const r = rParts[i] || 0;
+    const l = lParts[i] || 0;
+    if (r > l) return true;
+    if (r < l) return false;
+  }
+  return false;
+}
+
+async function checkForUpdates(manual = false) {
+  try {
+    const response = await fetch('https://api.github.com/repos/Crypto90/smart-tinder/releases/latest', {
+      headers: {
+        'User-Agent': 'SmartTinder-Desktop-App',
+        'Accept': 'application/vnd.github.v3+json'
+      }
+    });
+
+    if (!response.ok) {
+      if (manual && mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('st-update-not-available', {
+          currentVersion: app.getVersion(),
+          reason: 'No published releases found yet.'
+        });
+      }
+      return;
+    }
+
+    const release = await response.json();
+    const latestTag = release.tag_name;
+    const currentVersion = app.getVersion();
+
+    if (latestTag && isNewerVersion(latestTag, currentVersion)) {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('st-update-available', {
+          latestVersion: latestTag.replace(/^v/, ''),
+          currentVersion,
+          releaseUrl: release.html_url || 'https://github.com/Crypto90/smart-tinder/releases/latest',
+          releaseName: release.name || latestTag,
+          publishedAt: release.published_at
+        });
+      }
+    } else if (manual) {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('st-update-not-available', {
+          currentVersion
+        });
+      }
+    }
+  } catch (err) {
+    if (manual && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('st-update-error', { error: err.message });
+    }
+  }
+}
 
 let mainWindow;
 
@@ -76,12 +136,31 @@ app.on('ready', () => {
   });
 
   createWindow();
+
+  // Run initial background update check after 5 seconds
+  setTimeout(() => {
+    checkForUpdates(false);
+  }, 5000);
 });
 
 ipcMain.on('st-toggle-devtools', () => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.toggleDevTools();
   }
+});
+
+ipcMain.on('st-check-for-updates', () => {
+  checkForUpdates(true);
+});
+
+ipcMain.on('st-open-url', (event, url) => {
+  if (typeof url === 'string' && (url.startsWith('https://') || url.startsWith('http://'))) {
+    shell.openExternal(url);
+  }
+});
+
+ipcMain.on('st-get-version', (event) => {
+  event.returnValue = app.getVersion();
 });
 
 app.on('window-all-closed', function () {

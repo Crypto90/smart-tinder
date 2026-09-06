@@ -272,4 +272,26 @@ const defaultPresets = [
   console.log('✓ Test 10 Passed: Preset Export/Import JSON integrity verified');
 }
 
-console.log('\nAll 10 test suites passed successfully! 🚀');
+// --- Test 11: Release Update Version Comparison Logic ---
+{
+  function isNewerVersion(remote, local) {
+    const rParts = (remote || '').replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
+    const lParts = (local || '').replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
+    for (let i = 0; i < Math.max(rParts.length, lParts.length); i++) {
+      const r = rParts[i] || 0;
+      const l = lParts[i] || 0;
+      if (r > l) return true;
+      if (r < l) return false;
+    }
+    return false;
+  }
+
+  assert.strictEqual(isNewerVersion('v1.0.1', '1.0.0'), true, '1.0.1 should be newer than 1.0.0');
+  assert.strictEqual(isNewerVersion('2.0.0', '1.9.9'), true, '2.0.0 should be newer than 1.9.9');
+  assert.strictEqual(isNewerVersion('1.0.0', '1.0.0'), false, '1.0.0 should not be newer than 1.0.0');
+  assert.strictEqual(isNewerVersion('0.9.0', '1.0.0'), false, '0.9.0 should not be newer than 1.0.0');
+  assert.strictEqual(isNewerVersion('v1.2.0', '1.1.9'), true, 'v1.2.0 should be newer than 1.1.9');
+  console.log('✓ Test 11 Passed: Release Update Version Comparison verified');
+}
+
+console.log('\nAll 11 test suites passed successfully! 🚀');

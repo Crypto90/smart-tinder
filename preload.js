@@ -136,9 +136,22 @@
               <span>Smart Tinder</span>
             </span>
             <div style="display: flex; align-items: center; gap: 6px;">
-              <button id="st-devtools-btn" title="Toggle Developer Console (F12 or Cmd+Option+I)" style="background: none; border: none; color: white; cursor: pointer; font-size: 11px; padding: 0 2px; opacity: 0.7;">🛠️</button>
+              <button id="st-check-update-btn" title="Check for Updates" style="background: none; border: none; color: white; cursor: pointer; font-size: 11px; padding: 0 2px; opacity: 0.75;">🔄</button>
+              <button id="st-devtools-btn" title="Toggle Developer Console (F12 or Cmd+Option+I)" style="background: none; border: none; color: white; cursor: pointer; font-size: 11px; padding: 0 2px; opacity: 0.75;">🛠️</button>
               <button id="st-compact-btn" title="Compact Mode" style="background: none; border: none; color: white; cursor: pointer; font-size: 12px; padding: 0 3px; opacity: 0.9;">🗕</button>
               <button id="st-collapse" title="Minimize Body" style="background: none; border: none; color: white; cursor: pointer; font-size: 12px; padding: 0 3px; opacity: 0.9;">${isCollapsed ? '▲' : '▼'}</button>
+            </div>
+          </div>
+          
+          <!-- Update Notification Banner (Hidden by default) -->
+          <div id="st-update-banner" style="display: none; background: linear-gradient(135deg, rgba(0, 230, 118, 0.22), rgba(41, 121, 255, 0.22)); border-bottom: 1px solid rgba(0, 230, 118, 0.4); padding: 6px 10px; font-size: 10px; align-items: center; justify-content: space-between; flex-shrink: 0;">
+            <div style="display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              <span>🚀</span>
+              <span id="st-update-text" style="color: #00e676; font-weight: 700; font-size: 10px;">Update available!</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 5px;">
+              <button id="st-update-action-btn" style="background: #00e676; border: none; border-radius: 4px; color: #000; font-size: 9px; font-weight: 800; padding: 2px 7px; cursor: pointer;">DOWNLOAD ➔</button>
+              <button id="st-update-dismiss-btn" title="Dismiss" style="background: none; border: none; color: rgba(255,255,255,0.6); font-size: 12px; cursor: pointer; padding: 0 2px; line-height: 1;">✕</button>
             </div>
           </div>
           
@@ -640,6 +653,69 @@
           console.warn('Could not toggle DevTools via IPC:', e);
         }
       });
+    }
+
+    // --- Release Update Checker Controls & Listeners ---
+    const updateBanner = document.getElementById('st-update-banner');
+    const updateText = document.getElementById('st-update-text');
+    const updateActionBtn = document.getElementById('st-update-action-btn');
+    const updateDismissBtn = document.getElementById('st-update-dismiss-btn');
+    const checkUpdateBtn = document.getElementById('st-check-update-btn');
+    let latestReleaseUrl = 'https://github.com/Crypto90/smart-tinder/releases';
+
+    if (updateDismissBtn) {
+      updateDismissBtn.addEventListener('click', () => {
+        if (updateBanner) updateBanner.style.display = 'none';
+      });
+    }
+
+    if (updateActionBtn) {
+      updateActionBtn.addEventListener('click', () => {
+        try {
+          const { ipcRenderer } = require('electron');
+          ipcRenderer.send('st-open-url', latestReleaseUrl);
+        } catch (e) {
+          window.open(latestReleaseUrl, '_blank');
+        }
+      });
+    }
+
+    if (checkUpdateBtn) {
+      checkUpdateBtn.addEventListener('click', () => {
+        try {
+          statusEl.textContent = 'Checking for updates...';
+          const { ipcRenderer } = require('electron');
+          ipcRenderer.send('st-check-for-updates');
+        } catch (e) {
+          console.warn('Could not check for updates:', e);
+        }
+      });
+    }
+
+    try {
+      const { ipcRenderer } = require('electron');
+      ipcRenderer.on('st-update-available', (event, data) => {
+        if (updateBanner && updateText) {
+          latestReleaseUrl = data.releaseUrl || latestReleaseUrl;
+          updateText.textContent = `v${data.latestVersion} available!`;
+          updateBanner.style.display = 'flex';
+        }
+      });
+
+      ipcRenderer.on('st-update-not-available', (event, data) => {
+        statusEl.textContent = `Smart Tinder is up to date (v${data.currentVersion || '1.0.0'})`;
+        setTimeout(() => {
+          if (!isLiking && statusEl.textContent.includes('up to date')) {
+            statusEl.textContent = 'Ready.';
+          }
+        }, 4000);
+      });
+
+      ipcRenderer.on('st-update-error', () => {
+        statusEl.textContent = 'Update check failed (offline).';
+      });
+    } catch (e) {
+      // Context without IPC
     }
 
     maxDistInput.addEventListener('change', (e) => {

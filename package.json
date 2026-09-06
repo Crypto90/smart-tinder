@@ -1,16 +1,99 @@
 {
   "name": "smarttinder",
   "version": "1.0.0",
+  "description": "Smart Criteria Filter & Anti-Detection Automation Engine for Tinder",
+  "author": "Crypto90",
+  "license": "MIT",
   "main": "main.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Crypto90/smart-tinder.git"
+  },
   "scripts": {
     "start": "electron .",
-    "test": "node test_suite.js"
+    "test": "node test_suite.js",
+    "build": "electron-builder",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux",
+    "build:all": "electron-builder -mwl"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "build": {
+    "appId": "com.smarttinder.app",
+    "productName": "Smart Tinder",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json",
+      "assets/**"
+    ],
+    "mac": {
+      "icon": "assets/icon.png",
+      "category": "public.app-category.social-networking",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ]
+    },
+    "win": {
+      "icon": "assets/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "linux": {
+      "icon": "assets/icon.png",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Network"
+    }
+  },
   "devDependencies": {
-    "electron": "^32.3.3"
+    "electron": "^32.3.3",
+    "electron-builder": "^24.13.3"
   }
 }

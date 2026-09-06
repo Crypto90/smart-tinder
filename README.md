@@ -9,6 +9,7 @@ Featuring deterministic negative filtering, human-like interaction loops, catego
 
 ---
 
+[![Release](https://img.shields.io/github/v/release/Crypto90/smart-tinder?style=for-the-badge&color=fd297b)](https://github.com/Crypto90/smart-tinder/releases)
 [![Electron](https://img.shields.io/badge/Electron-32.x-47848F?style=for-the-badge&logo=electron&logoColor=white)](https://www.electronjs.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey?style=for-the-badge)](https://github.com/Crypto90/smart-tinder)
@@ -70,6 +71,19 @@ Instead of blind mass-swiping or random heuristics, Smart Tinder inspects profil
 - **Compact Mode**: Collapse into an ultra-minimal horizontal status bar (`🗕`).
 - **Developer Console Integration**: Clean startup with DevTools hidden by default. Toggle anytime via the `🛠️` header button or standard shortcuts (`F12`, `Cmd+Option+I`).
 
+## 📦 Downloads & Precompiled Releases
+
+Download the latest version directly from the [**GitHub Releases**](https://github.com/Crypto90/smart-tinder/releases/latest) page:
+
+| Platform | Format | Architectures | Instructions |
+| :--- | :--- | :--- | :--- |
+| 🍏 **macOS** | `.dmg`, `.zip` | Apple Silicon (`arm64`), Intel (`x64`) | Drag to Applications. Open with Right-Click -> Open on first run. |
+| 🪟 **Windows** | `.exe` (Installer), Portable `.exe` | `x64` | Run the installer or standalone executable. |
+| 🐧 **Linux** | `.AppImage`, `.deb` | `x64` | Make executable (`chmod +x *.AppImage`) or install `.deb`. |
+
+> [!TIP]
+> **Automatic Update Checker**: Smart Tinder automatically checks GitHub for newer releases on startup and displays an in-app banner (`🚀 Update available!`) with a 1-click update link. You can also manually check anytime via the `🔄` header button.
+
 ---
 
 ## 🚀 Getting Started
@@ -96,10 +110,29 @@ Instead of blind mass-swiping or random heuristics, Smart Tinder inspects profil
    npm test
    ```
 
-4. **Start the application:**
+4. **Start the application in development mode:**
    ```bash
    npm start
    ```
+
+### 🛠️ Building & Packaging for Production
+
+Package standalone desktop installers locally using `electron-builder`:
+
+```bash
+# Package for macOS (.dmg, .zip for arm64 & x64)
+npm run build:mac
+
+# Package for Windows (.exe NSIS installer & portable .exe)
+npm run build:win
+
+# Package for Linux (.AppImage & .deb)
+npm run build:linux
+
+# Package all platforms simultaneously
+npm run build:all
+```
+All packaged files are output to the `dist/` directory.
 
 ---
 
