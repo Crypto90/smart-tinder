@@ -1,57 +1,39 @@
-## 🔥 Welcome to Smart Tinder v1.0.0!
+## 🔥 Smart Tinder v1.0.1
 
-We are thrilled to announce the official **v1.0.0** release of **Smart Tinder** — an intelligent, cross-platform desktop client and automation engine featuring deterministic criteria filtering, natural human-like swiping behavior, and a sleek Glassmorphic HUD overlay.
-
----
-
-### ✨ What's Inside
-
-#### 🛡️ Deterministic Criteria & Negative Filters
-- **Auto-Pass Keyword Engine**: Automatically passes profiles containing excluded tags, pronouns, couples, or spam keywords before dispatching any like.
-- **One-Click Presets**:
-  - ⚧️ **Gender & Pronouns**: `he/him`, `they/them`, `trans`, `transgender`, `ladyboy`, `ftm`, `mtf`, and more.
-  - 👥 **Couples & Poly**: `couple`, `looking for third`, `dreier`, `paar`, `unicorn`.
-  - 💸 **Promo & Spam**: `onlyfans`, `cashapp`, `paypal.me`, `sugar baby`, `insta:`, `ig:`, `snap:`, `sc:`.
-- **Advanced Profile Filters**:
-  - 📝 **Bio Required**: Auto-passes profiles with blank or low-effort bios (< 6 characters).
-  - ☑️ **Verified Only**: Auto-passes accounts lacking Tinder's blue checkmark.
-  - 🎂 **Age Range Cap**: Enforce strict minimum and maximum age brackets directly in the HUD.
-- **Distance Limit**: Cap match discovery by kilometer radius.
-- **Configurable Pass Rate**: Random pass rate slider (0%–50%) for customizable like ratios.
-- **Preset Portability**: 1-click JSON configuration export and import to swap and backup setups.
-
-#### ⚡ Anti-Detection & Human Simulation
-- **☕ Anti-Shadowban Cooldowns**: Natural periodic breaks (40–60s) every 20–30 swipes with live countdown timer and instant `[Skip Break]` override.
-- **Micro-Inspection Gazing**: Subtle 15% random photo viewing pauses before deciding to mimic authentic human gaze patterns.
-- **Natural Timing & Jitter**: Configurable base swipe delays with random jitter variance.
-- **Dual-Action Fallback**: Dispatches native arrow key events with automated button-click fallback.
-
-#### 🗂️ Explore Category Looping & Queue Management
-- **Zero-Reload SPA Navigation**: Fast, native client-side navigation between Explore categories and regular stacks with no page flushes.
-- **Explore Category Scanner**: Discovers active Tinder Explore categories and lets you configure per-category swipe quotas.
-- **Auto-Loop Mode**: Automatically rotates stacks and re-queues once exhausted.
-
-#### 🎨 Modern Glassmorphic HUD & Live Decision Feed
-- **📋 Live Decision Feed**: Real-time audit log of the last 10 profile evaluations (name, age, action: LIKE/PASS, reason, timestamp).
-- **Neon Glow Visuals**: Dynamic green (LIKE) and red (PASS) card glow feedback.
-- **Dockable & Compact**: Drag anywhere on screen with boundary clamping, or collapse into an ultra-minimal horizontal status bar (`🗕`).
-- **🔄 In-App Update Checker**: Automatic startup check and on-demand check button notifying you of newer releases with a 1-click download link.
+We are pleased to release **Smart Tinder v1.0.1**! This update introduces intelligent **Empty Category Detection**, continuous **5-second anti-false-positive loading verification**, seamless **SPA category navigation**, and enhanced profile card container isolation.
 
 ---
 
-### 📦 Installation Guide
+### ✨ What's New in v1.0.1
 
-| Operating System | Download | Quick Instructions |
+#### 🎯 Explore Category Auto-Advancement & Anti-Stuck Engine
+- **Intelligent Empty Screen Detection**: Automatically detects when all potential matches in an Explore category have been exhausted across both German and English interfaces (*"Gibt gerade keine neuen Members in deiner Gegend"*, *"Es gibt keine potentiellen Matches mehr"*, *"Zurück zu Explore"*, *"There's no one new around you"*).
+- **5-Second Debounced Continuous Verification**: Eliminates false positives when profile batches take 1–3 seconds to load over slow networks. The HUD displays real-time countdown progress (`Looking for profiles (X.Xs / 5.0s)...`). If profiles arrive during the window, swiping resumes instantly. Only an uninterrupted 5.0s empty state triggers a category transition.
+- **One-Click Category View Exit**: Automatically identifies and triggers the *"Zurück zu Explore"* button or category close controls (`✕`), cleanly returning to the Explore grid without page refreshes.
+- **Queue Auto-Progression**: Once an empty category is confirmed, Smart Tinder smoothly advances to the next queued category or normal recommendations stack.
+
+#### 🛡️ Profile Extraction & Container Isolation
+- **Strict Profile Card Isolation**: Resolves an issue where generic `main` page containers were falsely treated as active cards during empty states. Fallback containers now strictly require both profile header elements and active swipe controls while rejecting empty-state messages.
+- **Live Decision Feed Logging**: Empty category transitions and stack events are recorded directly into the HUD's Live Decision Feed with exact timestamps.
+
+#### 🧪 Test Suite Expansion
+- Added **Tests 12, 13, and 14** covering multi-language empty category screen recognition, 5-second continuous threshold logic, timer resets on profile load, and container isolation. All 14 test suites pass 100% cleanly.
+
+---
+
+### 📦 Installation & Direct Downloads (v1.0.1)
+
+| Platform | Download Link | Quick Instructions |
 | :--- | :--- | :--- |
-| 🍏 **macOS (Apple Silicon M1–M4)** | [`Smart.Tinder-1.0.0-arm64.dmg`](https://github.com/Crypto90/smart-tinder/releases/download/v1.0.0/Smart.Tinder-1.0.0-arm64.dmg) | Open DMG and drag to Applications. |
-| 🍏 **macOS (Intel x64)** | [`Smart.Tinder-1.0.0.dmg`](https://github.com/Crypto90/smart-tinder/releases/download/v1.0.0/Smart.Tinder-1.0.0.dmg) | Open DMG and drag to Applications. |
-| 🪟 **Windows (Installer)** | [`Smart.Tinder.Setup.1.0.0.exe`](https://github.com/Crypto90/smart-tinder/releases/download/v1.0.0/Smart.Tinder.Setup.1.0.0.exe) | Run setup to install with Desktop & Start Menu shortcuts. |
-| 🪟 **Windows (Portable)** | [`Smart.Tinder.1.0.0.exe`](https://github.com/Crypto90/smart-tinder/releases/download/v1.0.0/Smart.Tinder.1.0.0.exe) | Standalone executable — run anywhere without installation. |
-| 🐧 **Linux (Universal)** | [`Smart.Tinder-1.0.0.AppImage`](https://github.com/Crypto90/smart-tinder/releases/download/v1.0.0/Smart.Tinder-1.0.0.AppImage) | Run `chmod +x Smart.Tinder-1.0.0.AppImage && ./Smart.Tinder-1.0.0.AppImage` |
-| 🐧 **Linux (Debian / Ubuntu)** | [`smarttinder_1.0.0_amd64.deb`](https://github.com/Crypto90/smart-tinder/releases/download/v1.0.0/smarttinder_1.0.0_amd64.deb) | Install via `sudo dpkg -i smarttinder_1.0.0_amd64.deb` |
+| 🍏 **macOS (Apple Silicon M1–M4)** | [`Smart.Tinder-1.0.1-arm64.dmg`](https://github.com/Crypto90/smart-tinder/releases/download/v1.0.1/Smart.Tinder-1.0.1-arm64.dmg) | Open DMG and drag to Applications. |
+| 🍏 **macOS (Intel x64)** | [`Smart.Tinder-1.0.1.dmg`](https://github.com/Crypto90/smart-tinder/releases/download/v1.0.1/Smart.Tinder-1.0.1.dmg) | Open DMG and drag to Applications. |
+| 🪟 **Windows (Installer)** | [`Smart.Tinder.Setup.1.0.1.exe`](https://github.com/Crypto90/smart-tinder/releases/download/v1.0.1/Smart.Tinder.Setup.1.0.1.exe) | Standard installer with Start Menu and Desktop shortcuts. |
+| 🪟 **Windows (Portable)** | [`Smart.Tinder.1.0.1.exe`](https://github.com/Crypto90/smart-tinder/releases/download/v1.0.1/Smart.Tinder.1.0.1.exe) | Standalone executable — run directly without installation. |
+| 🐧 **Linux (Universal)** | [`Smart.Tinder-1.0.1.AppImage`](https://github.com/Crypto90/smart-tinder/releases/download/v1.0.1/Smart.Tinder-1.0.1.AppImage) | Run `chmod +x Smart.Tinder-1.0.1.AppImage && ./Smart.Tinder-1.0.1.AppImage` |
+| 🐧 **Linux (Debian / Ubuntu)** | [`smarttinder_1.0.1_amd64.deb`](https://github.com/Crypto90/smart-tinder/releases/download/v1.0.1/smarttinder_1.0.1_amd64.deb) | Install via `sudo dpkg -i smarttinder_1.0.1_amd64.deb` |
 
 > [!TIP]
-> **macOS First Launch Note**: Because this is an open-source project without Apple's $99/yr developer certificate, if macOS Gatekeeper flags it on first launch, go to **System Settings ➔ Privacy & Security** and click **"Open Anyway"**, or run:
+> **macOS First Launch Note**: If macOS Gatekeeper flags the app on first launch (common for open-source builds without Apple developer certificates), navigate to **System Settings ➔ Privacy & Security** and click **"Open Anyway"**, or run:
 > ```bash
 > xattr -cr /Applications/"Smart Tinder.app"
 > ```
@@ -59,13 +41,13 @@ We are thrilled to announce the official **v1.0.0** release of **Smart Tinder** 
 ---
 
 ### 🔒 Privacy & Security
-- **100% Local**: All processing runs strictly inside your local Chromium context.
-- **Zero Telemetry**: No credentials, swipes, or profile data are ever sent to external servers.
+- **100% Local Execution**: All criteria evaluation and DOM automation run entirely inside your local client session.
+- **Zero Telemetry / Zero Storage**: Your account credentials, swipes, and location never leave your device.
 
 ---
 
-### ☕ Support the Developer
-If **Smart Tinder** saves you time and enhances your matching experience, please consider buying me a coffee to support continued development and maintenance:
+### ☕ Support the Project
+If **Smart Tinder** saves you time and enhances your experience, please consider supporting development:
 
 <div align="center">
 
@@ -74,4 +56,4 @@ If **Smart Tinder** saves you time and enhances your matching experience, please
 </div>
 
 ---
-**Full Changelog**: https://github.com/Crypto90/smart-tinder/commits/v1.0.0
+**Full Changelog**: https://github.com/Crypto90/smart-tinder/compare/v1.0.0...v1.0.1

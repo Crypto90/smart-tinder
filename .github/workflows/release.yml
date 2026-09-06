@@ -94,7 +94,7 @@ jobs:
             dist/*.AppImage
             dist/*.deb
           body_path: RELEASE_NOTES.md
-          name: ${{ github.ref_name }} - Initial Release & Cross-Platform Launch
+          name: Smart Tinder ${{ github.ref_name }}
           draft: false
           prerelease: false
         env:

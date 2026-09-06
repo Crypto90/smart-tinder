@@ -79,6 +79,7 @@
     // Runtime execution variables
     let activeTimeoutId = null;
     let emptySwipeCount = 0;
+    let emptyCategoryStartTime = null;
     let consecutiveMissedCardCount = 0;
     let loopHasProfiles = false;
     let lastProfileIdentifier = '';
@@ -1066,21 +1067,45 @@
     }
 
     function getCleanProfileContainer() {
-      const selectors = [
+      const specificCardSelectors = [
         '[data-testid="recs-card"]',
         '[data-testid="rec-card"]',
         '.recsCardboard__card',
         '.recCard',
         'div[aria-label*="Profile" i]',
-        'div[aria-hidden="false"] div[role="img"]',
-        'div[role="main"]',
-        '#main-content',
-        'main'
+        'div[aria-hidden="false"] div[role="img"]'
       ];
-      for (const sel of selectors) {
+      for (const sel of specificCardSelectors) {
         const els = document.querySelectorAll(sel);
         for (const el of els) {
           if (!el.closest('#st-wrapper')) {
+            return el;
+          }
+        }
+      }
+
+      // Fallback: check main containers, but ONLY if they contain a genuine profile header & action controls,
+      // and DO NOT contain empty-stack exhausted keywords
+      const fallbackSelectors = ['div[role="main"]', '#main-content', 'main'];
+      for (const sel of fallbackSelectors) {
+        const el = document.querySelector(sel);
+        if (el && !el.closest('#st-wrapper')) {
+          const text = (el.innerText || '').toLowerCase();
+          const hasEmptyMarkers = text.includes("keine neuen members") ||
+                                  text.includes("keine potentiellen matches") ||
+                                  text.includes("zurück zu explore") ||
+                                  text.includes("back to explore") ||
+                                  text.includes("no one new around you") ||
+                                  text.includes("no new members in your area") ||
+                                  text.includes("out of potential matches");
+          if (hasEmptyMarkers) {
+            continue;
+          }
+          const hasName = Boolean(el.querySelector('h1, span[itemprop="name"], [data-testid="rec-name"]'));
+          const hasGamepad = Boolean(document.querySelector(
+            'button[aria-label*="Like" i], button[aria-label*="Gefällt mir" i], button[data-testid="gamepad-like"]'
+          ));
+          if (hasName && hasGamepad) {
             return el;
           }
         }
@@ -1387,28 +1412,112 @@
       return false;
     }
 
-    // --- Strict Empty Stack Verifier ---
-    function isStackGenuinelyEmpty() {
-      // 1. If a profile card signature exists, the stack is definitely NOT empty!
-      const sig = getCleanProfileSignature();
-      if (sig && sig.length > 5) {
-        return false;
+    function hasGamepadButtons() {
+      const selectors = [
+        'button[aria-label*="Like" i]',
+        'button[aria-label*="Gefällt mir" i]',
+        'button[data-testid="gamepad-like"]',
+        'button[aria-label*="Nope" i]',
+        'button[aria-label*="Pass" i]',
+        'button[data-testid="gamepad-pass"]'
+      ];
+      for (const sel of selectors) {
+        const btn = document.querySelector(sel);
+        if (btn && !btn.closest('#st-wrapper')) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function findBackToExploreButton() {
+      const elements = document.querySelectorAll('button, a, div[role="button"]');
+      for (const el of elements) {
+        if (el.closest('#st-wrapper')) continue;
+        const text = (el.innerText || '').toLowerCase().trim();
+        const aria = (el.getAttribute('aria-label') || '').toLowerCase();
+        if (text.includes('zurück zu explore') || text.includes('back to explore') || text.includes('go to explore') ||
+            aria.includes('zurück zu explore') || aria.includes('back to explore') || aria.includes('go to explore')) {
+          return el;
+        }
+      }
+      return null;
+    }
+
+    function exitCategoryViewToExplore() {
+      // 1. Prioritize explicit "Zurück zu Explore" button
+      const exploreBtn = findBackToExploreButton();
+      if (exploreBtn) {
+        try { exploreBtn.click(); return true; } catch (e) {}
       }
 
-      // 2. Check if Tinder's beacon / radar animation is visible
-      const isBeaconActive = document.querySelector('.beacon') !== null ||
-                             document.querySelector('div[class*="beacon" i]') !== null ||
-                             document.querySelector('[data-testid="radar"]') !== null;
+      // 2. Category header close / back button (e.g. X button)
+      const closeSelectors = [
+        'button[aria-label*="Close" i]',
+        'button[aria-label*="Schließen" i]',
+        'button[aria-label*="Back" i]',
+        'button[aria-label*="Zurück" i]',
+        '[data-testid*="back" i]',
+        '[data-testid*="close" i]'
+      ];
+      for (const sel of closeSelectors) {
+        const btn = document.querySelector(sel);
+        if (btn && !btn.closest('#st-wrapper')) {
+          try {
+            const clickable = btn.closest('button') || btn;
+            clickable.click();
+            return true;
+          } catch (e) {}
+        }
+      }
 
-      // 3. Check for specific empty stack messages (clean text only, exact phrasing)
+      // 3. Fallback to client navigation to Explore
+      return clientNavigate('/app/explore');
+    }
+
+    // --- Strict Empty Stack / Out of Profiles Verifier ---
+    function isStackGenuinelyEmpty() {
+      // 1. Direct detection: "Zurück zu Explore" / "Back to Explore" button is rendered
+      if (findBackToExploreButton() !== null) {
+        return true;
+      }
+
+      // 2. Check for empty stack / category messages across languages
       const pageText = getCleanProfileText().toLowerCase();
       const hasEmptyText = pageText.includes("there's no one new around you") ||
                            pageText.includes("there's no one new") ||
                            pageText.includes("niemanden neues in deiner umgebung") ||
                            pageText.includes("es gibt niemanden neues") ||
-                           pageText.includes("out of potential matches");
+                           pageText.includes("out of potential matches") ||
+                           pageText.includes("gibt gerade keine neuen members in deiner gegend") ||
+                           pageText.includes("keine neuen members in deiner gegend") ||
+                           pageText.includes("keine potentiellen matches in deiner gegend") ||
+                           pageText.includes("keine potentiellen matches") ||
+                           pageText.includes("erweiter den entfernungsradius") ||
+                           pageText.includes("expand your search distance") ||
+                           pageText.includes("no new members in your area") ||
+                           pageText.includes("zurück zu explore") ||
+                           pageText.includes("back to explore");
 
-      return isBeaconActive || hasEmptyText;
+      if (hasEmptyText) {
+        return true;
+      }
+
+      // 3. If genuine profile card container exists, stack is NOT empty!
+      const card = getCleanProfileContainer();
+      if (card) {
+        return false;
+      }
+
+      // 4. Check if Tinder's beacon / radar animation is visible
+      const isBeaconActive = document.querySelector('.beacon') !== null ||
+                             document.querySelector('div[class*="beacon" i]') !== null ||
+                             document.querySelector('[data-testid="radar"]') !== null;
+
+      // 5. If no card and no gamepad buttons exist, screen is loading or empty
+      const noGamepad = !hasGamepadButtons();
+
+      return isBeaconActive || noGamepad;
     }
 
     // --- 12. Swiping Automation Loop ---
@@ -1425,18 +1534,40 @@
       // Dismiss any interfering popups
       dismissPopups();
 
-      // Check if stack is genuinely empty
+      // Check if stack is empty or loading (with continuous 5-second debounce)
       if (isStackGenuinelyEmpty()) {
-        emptySwipeCount++;
-        statusEl.textContent = `Looking for profiles (${emptySwipeCount}/3)...`;
-        if (emptySwipeCount >= 3) {
-          emptySwipeCount = 0;
-          handleEndOfStack('empty');
+        const now = Date.now();
+        if (!emptyCategoryStartTime) {
+          emptyCategoryStartTime = now;
+        }
+
+        const elapsedMs = now - emptyCategoryStartTime;
+        const elapsedSec = (elapsedMs / 1000).toFixed(1);
+
+        if (elapsedMs < 5000) {
+          statusEl.textContent = `Looking for profiles (${elapsedSec}s / 5.0s)...`;
+          // Re-check frequently (600ms) without swiping to catch newly loaded cards or confirm empty
+          activeTimeoutId = setTimeout(performSwipe, 600);
           return;
         }
-        scheduleNextSwipe(1500);
+
+        // Confirmed empty for 5 seconds straight! Transition to next category
+        emptyCategoryStartTime = null;
+        emptySwipeCount = 0;
+        statusEl.textContent = 'Category empty (5s confirmed). Switching category...';
+        addActivityLog('INFO', 'Category Empty', '', 'Exhausted (5s confirmed)');
+
+        // Exit category view if inside one
+        exitCategoryViewToExplore();
+
+        activeTimeoutId = setTimeout(() => {
+          handleEndOfStack('empty');
+        }, 800);
         return;
       }
+
+      // Genuine card present: reset continuous empty counter
+      emptyCategoryStartTime = null;
       emptySwipeCount = 0;
 
       // Micro-inspection simulation (15% chance to view next photo briefly before deciding)
@@ -1522,15 +1653,14 @@
             }
           } else {
             // Card didn't change: could be slow network, unresponsiveness, or stack just ran empty
-            consecutiveMissedCardCount++;
             if (isStackGenuinelyEmpty()) {
-              emptySwipeCount++;
-              if (emptySwipeCount >= 3) {
-                emptySwipeCount = 0;
-                handleEndOfStack('empty');
-                return;
-              }
-            } else if (consecutiveMissedCardCount >= 4) {
+              // Immediately route to performSwipe to manage the unified 5s continuous verification
+              scheduleNextSwipe(350);
+              return;
+            }
+
+            consecutiveMissedCardCount++;
+            if (consecutiveMissedCardCount >= 4) {
               consecutiveMissedCardCount = 0;
               statusEl.textContent = 'Card unmoving. Retrying action...';
               dismissPopups();
@@ -1566,13 +1696,18 @@
           'a[href*="/app/recs"], a[href$="/recs"], a[href="/app"], a[aria-label*="Recs" i], a[aria-label*="Matches" i], a[aria-label*="Tinder" i]'
         );
       } else if (targetPath.includes('/explore')) {
-        // Back button check if inside a category stack
+        // 1. Check "Zurück zu Explore" button
+        const exploreBackBtn = findBackToExploreButton();
+        if (exploreBackBtn) {
+          try { exploreBackBtn.click(); return true; } catch (e) {}
+        }
+
+        // 2. Back / Close button check if inside a category stack
         const backBtn = document.querySelector(
-          'button[aria-label*="Back" i], button[aria-label*="Zurück" i], a[aria-label*="Back" i], a[aria-label*="Zurück" i]'
+          'button[aria-label*="Back" i], button[aria-label*="Zurück" i], a[aria-label*="Back" i], a[aria-label*="Zurück" i], button[aria-label*="Close" i], button[aria-label*="Schließen" i], [data-testid*="back" i], [data-testid*="close" i]'
         );
         if (backBtn && !backBtn.closest('#st-wrapper')) {
-          backBtn.click();
-          return true;
+          try { backBtn.click(); return true; } catch (e) {}
         }
         targetLink = document.querySelector(
           'a[href*="/app/explore"], a[href$="/explore"], a[aria-label*="Explore" i], a[aria-label*="Entdecken" i]'
@@ -1625,8 +1760,11 @@
     async function diveIntoCategory(catTitle) {
       statusEl.textContent = `Opening ${catTitle}...`;
 
-      // Navigate to /app/explore if not already there
-      if (!window.location.pathname.includes('/explore') || window.location.pathname.length > '/app/explore'.length + 1) {
+      // If currently inside a category modal / empty category view, exit back to explore grid first
+      if (findBackToExploreButton() || window.location.pathname.length > '/app/explore'.length + 1) {
+        exitCategoryViewToExplore();
+        await new Promise(r => setTimeout(r, 1200));
+      } else if (!window.location.pathname.includes('/explore')) {
         clientNavigate('/app/explore');
         await new Promise(r => setTimeout(r, 1200));
       }
@@ -1702,6 +1840,7 @@
 
     function navigateToItem(item) {
       currentCategorySwipes = 0;
+      emptyCategoryStartTime = null;
       sessionStorage.setItem('st-catSwipes', '0');
       catProgressEl.textContent = `0 / ${maxSwipesPerCat}`;
 
@@ -1791,6 +1930,7 @@
 
       compactToggleRun.textContent = '⏸️';
       emptySwipeCount = 0;
+      emptyCategoryStartTime = null;
       consecutiveMissedCardCount = 0;
       statusEl.textContent = 'Starting swiping engine...';
       updateQueueVisuals();
@@ -1800,6 +1940,7 @@
 
     function stopAutomation() {
       isLiking = false;
+      emptyCategoryStartTime = null;
       sessionStorage.setItem('st-isLiking', 'false');
       sessionStorage.removeItem('st-queue');
       currentQueue = [];

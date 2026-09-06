@@ -294,4 +294,162 @@ const defaultPresets = [
   console.log('✓ Test 11 Passed: Release Update Version Comparison verified');
 }
 
-console.log('\nAll 11 test suites passed successfully! 🚀');
+// --- Test 12: Empty Category Screen & 'Zurück zu Explore' Detection ---
+{
+  function isCategoryEmpty(hasCard, hasBackToExploreBtn, pageText, hasBeacon, hasGamepad) {
+    if (hasBackToExploreBtn) return true;
+
+    const lower = (pageText || '').toLowerCase();
+    const hasEmptyText = lower.includes("there's no one new around you") ||
+                         lower.includes("there's no one new") ||
+                         lower.includes("niemanden neues in deiner umgebung") ||
+                         lower.includes("es gibt niemanden neues") ||
+                         lower.includes("out of potential matches") ||
+                         lower.includes("gibt gerade keine neuen members in deiner gegend") ||
+                         lower.includes("keine neuen members in deiner gegend") ||
+                         lower.includes("keine potentiellen matches in deiner gegend") ||
+                         lower.includes("keine potentiellen matches") ||
+                         lower.includes("erweiter den entfernungsradius") ||
+                         lower.includes("expand your search distance") ||
+                         lower.includes("no new members in your area") ||
+                         lower.includes("zurück zu explore") ||
+                         lower.includes("back to explore");
+
+    if (hasEmptyText) return true;
+    if (hasCard) return false;
+    return Boolean(hasBeacon || !hasGamepad);
+  }
+
+  // 12a: German empty category screen from screenshot
+  const screenshotText = "Es gibt keine potentiellen Matches in deiner Gegend mehr. Du kannst dir jetzt Profile auf der ganzen Welt anschauen. Gibt gerade keine neuen Members in deiner Gegend. Zurück zu Explore";
+  assert.strictEqual(
+    isCategoryEmpty(false, true, screenshotText, true, false),
+    true,
+    'Screenshot empty category state must be recognized as empty'
+  );
+  console.log('✓ Test 12a Passed: German empty category screen detected');
+
+  // 12b: Button "Zurück zu Explore" alone identifies empty category view
+  assert.strictEqual(
+    isCategoryEmpty(false, true, "", false, false),
+    true,
+    '"Zurück zu Explore" button presence must identify empty category'
+  );
+  console.log('✓ Test 12b Passed: "Zurück zu Explore" button identified');
+
+  // 12c: English "No new members in your area"
+  assert.strictEqual(
+    isCategoryEmpty(false, false, "There are no new members in your area. Expand your search distance.", false, false),
+    true,
+    'English empty category text must identify empty stack'
+  );
+  console.log('✓ Test 12c Passed: English empty category text detected');
+
+  // 12d: Real profile card containing word "explore" in bio does NOT falsely trigger empty
+  const activeProfileBio = "I love to explore nature, coffee shops, and travel!";
+  assert.strictEqual(
+    isCategoryEmpty(true, false, activeProfileBio, false, true),
+    false,
+    'Active card with casual "explore" mention in bio must NOT be detected as empty'
+  );
+  console.log('✓ Test 12d Passed: Active profile with "explore" keyword does not false-trigger');
+}
+
+// --- Test 13: 5-Second Continuous Straight Debounce Verification ---
+{
+  class EmptyStackManager {
+    constructor() {
+      this.emptyCategoryStartTime = null;
+      this.stackSwitched = false;
+    }
+
+    check(isEmpty, currentTime) {
+      if (isEmpty) {
+        if (!this.emptyCategoryStartTime) {
+          this.emptyCategoryStartTime = currentTime;
+        }
+        const elapsed = currentTime - this.emptyCategoryStartTime;
+        if (elapsed >= 5000) {
+          this.emptyCategoryStartTime = null;
+          this.stackSwitched = true;
+          return 'SWITCH_CATEGORY';
+        }
+        return `WAITING_${(elapsed / 1000).toFixed(1)}s`;
+      } else {
+        // Reset immediately when card appears
+        this.emptyCategoryStartTime = null;
+        return 'ACTIVE_CARD';
+      }
+    }
+  }
+
+  // 13a: Fast profile loading (takes 2 seconds to load API profiles)
+  const mgr1 = new EmptyStackManager();
+  let t0 = 10000;
+  assert.strictEqual(mgr1.check(true, t0), 'WAITING_0.0s');
+  assert.strictEqual(mgr1.check(true, t0 + 1000), 'WAITING_1.0s');
+  assert.strictEqual(mgr1.check(true, t0 + 2000), 'WAITING_2.0s');
+  // API profiles arrive at 2.5s -> card rendered
+  assert.strictEqual(mgr1.check(false, t0 + 2500), 'ACTIVE_CARD');
+  assert.strictEqual(mgr1.emptyCategoryStartTime, null, 'Timer must reset when profile loads');
+  assert.strictEqual(mgr1.stackSwitched, false, 'Category must NOT switch when profiles load in 2.5s');
+  console.log('✓ Test 13a Passed: False-positive check prevents premature switch during profile loading');
+
+  // 13b: Genuinely empty category shown for 5 seconds straight
+  const mgr2 = new EmptyStackManager();
+  let tStart = 50000;
+  assert.strictEqual(mgr2.check(true, tStart), 'WAITING_0.0s');
+  assert.strictEqual(mgr2.check(true, tStart + 2000), 'WAITING_2.0s');
+  assert.strictEqual(mgr2.check(true, tStart + 4000), 'WAITING_4.0s');
+  assert.strictEqual(mgr2.check(true, tStart + 4900), 'WAITING_4.9s');
+  assert.strictEqual(mgr2.stackSwitched, false, 'Must not switch at 4.9s');
+  // Reached 5.0 seconds continuous
+  assert.strictEqual(mgr2.check(true, tStart + 5000), 'SWITCH_CATEGORY');
+  assert.strictEqual(mgr2.stackSwitched, true, 'Must switch category after 5.0s straight');
+  console.log('✓ Test 13b Passed: 5 seconds straight confirms category switch');
+}
+
+// --- Test 14: Profile Container Isolation (Main Container Filtering) ---
+{
+  function resolveProfileCard(mockElement) {
+    if (!mockElement) return null;
+    const text = (mockElement.innerText || '').toLowerCase();
+    const hasEmptyMarkers = text.includes("keine neuen members") ||
+                            text.includes("keine potentiellen matches") ||
+                            text.includes("zurück zu explore") ||
+                            text.includes("back to explore") ||
+                            text.includes("no one new around you") ||
+                            text.includes("no new members in your area") ||
+                            text.includes("out of potential matches");
+    if (hasEmptyMarkers) return null;
+    if (mockElement.hasName && mockElement.hasLikeBtn) return mockElement;
+    return null;
+  }
+
+  // Fallback container matching 'main' but displaying empty message
+  const emptyMain = {
+    innerText: "Es gibt keine potentiellen Matches in deiner Gegend mehr. Zurück zu Explore",
+    hasName: false,
+    hasLikeBtn: false
+  };
+  assert.strictEqual(
+    resolveProfileCard(emptyMain),
+    null,
+    'Empty main page container must NEVER be identified as a profile card'
+  );
+  console.log('✓ Test 14a Passed: Empty main container rejected as profile card');
+
+  // Real profile inside main container
+  const validProfile = {
+    innerText: "Sarah, 26. Graphic designer in Hamburg.",
+    hasName: true,
+    hasLikeBtn: true
+  };
+  assert.ok(
+    resolveProfileCard(validProfile) !== null,
+    'Real profile container with name and like button must be accepted'
+  );
+  console.log('✓ Test 14b Passed: Valid profile container accepted');
+}
+
+console.log('\nAll 14 test suites passed successfully! 🚀');
