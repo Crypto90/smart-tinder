@@ -26,7 +26,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
       - name: Install Dependencies
@@ -42,6 +42,8 @@ jobs:
           sudo apt-get install -y libarchive-tools libfuse2
 
       - name: Build Application Package
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ "${{ runner.os }}" = "macOS" ]; then
             npm run build:mac
