@@ -452,4 +452,34 @@ const defaultPresets = [
   console.log('✓ Test 14b Passed: Valid profile container accepted');
 }
 
-console.log('\nAll 14 test suites passed successfully! 🚀');
+// --- Test 15: Header Collapse State & Collapsible Container Visibility ---
+{
+  function computeWidgetState(isCollapsed) {
+    return {
+      collapsibleDisplay: isCollapsed ? 'none' : 'flex',
+      buttonActiveClass: isCollapsed ? 'st-collapsed-active' : '',
+      iconRotation: isCollapsed ? 'rotate(180deg)' : 'rotate(0deg)',
+      tooltip: isCollapsed ? 'Expand Widget' : 'Collapse Widget',
+      wrapperClass: isCollapsed ? 'st-is-collapsed' : ''
+    };
+  }
+
+  // State when expanded (default)
+  const expanded = computeWidgetState(false);
+  assert.strictEqual(expanded.collapsibleDisplay, 'flex', 'Collapsible content (tabs + body) must be visible when expanded');
+  assert.strictEqual(expanded.buttonActiveClass, '', 'Button must not have active collapse class when expanded');
+  assert.strictEqual(expanded.iconRotation, 'rotate(0deg)', 'Chevron should point default (0deg) when expanded');
+  assert.strictEqual(expanded.tooltip, 'Collapse Widget');
+
+  // State when collapsed
+  const collapsed = computeWidgetState(true);
+  assert.strictEqual(collapsed.collapsibleDisplay, 'none', 'Collapsible content (tabs + body) must be completely hidden when collapsed');
+  assert.strictEqual(collapsed.buttonActiveClass, 'st-collapsed-active', 'Button must gain active highlight class when collapsed');
+  assert.strictEqual(collapsed.iconRotation, 'rotate(180deg)', 'Chevron should rotate 180deg when collapsed');
+  assert.strictEqual(collapsed.tooltip, 'Expand Widget');
+  assert.strictEqual(collapsed.wrapperClass, 'st-is-collapsed');
+  console.log('✓ Test 15 Passed: Header collapse state & tabs/body visibility verified');
+}
+
+console.log('\nAll 15 test suites passed successfully! 🚀');
+

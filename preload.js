@@ -97,8 +97,67 @@
         #st-body::-webkit-scrollbar-track, #st-kw-list::-webkit-scrollbar-track, #st-cat-list::-webkit-scrollbar-track { background: rgba(0,0,0,0.25); border-radius: 4px; }
         #st-body::-webkit-scrollbar-thumb, #st-kw-list::-webkit-scrollbar-thumb, #st-cat-list::-webkit-scrollbar-thumb { background: rgba(253,41,123,0.5); border-radius: 4px; }
         #st-body::-webkit-scrollbar-thumb:hover, #st-kw-list::-webkit-scrollbar-thumb:hover, #st-cat-list::-webkit-scrollbar-thumb:hover { background: rgba(253,41,123,0.8); }
+
+        .st-header-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 26px;
+          height: 26px;
+          border-radius: 7px;
+          border: 1px solid rgba(255, 255, 255, 0.16);
+          background: rgba(0, 0, 0, 0.24);
+          color: rgba(255, 255, 255, 0.88);
+          cursor: pointer;
+          padding: 0;
+          line-height: 1;
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          outline: none;
+          user-select: none;
+        }
+        .st-header-btn:hover {
+          background: rgba(255, 255, 255, 0.22);
+          border-color: rgba(255, 255, 255, 0.38);
+          color: #ffffff;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        }
+        .st-header-btn:active {
+          transform: scale(0.92);
+          background: rgba(255, 255, 255, 0.12);
+        }
+        .st-header-btn.st-collapsed-active {
+          background: rgba(255, 255, 255, 0.28);
+          border-color: rgba(255, 255, 255, 0.55);
+          color: #ffffff;
+          box-shadow: inset 0 1px 3px rgba(0,0,0,0.25), 0 0 10px rgba(255,255,255,0.22);
+        }
+        .st-header-btn svg {
+          width: 13px;
+          height: 13px;
+          stroke: currentColor;
+          fill: none;
+          stroke-width: 2;
+          stroke-linecap: round;
+          stroke-linejoin: round;
+          transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .st-spin svg {
+          animation: st-spin-anim 0.75s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+        @keyframes st-spin-anim {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        #st-wrapper.st-is-collapsed {
+          border-radius: 14px;
+        }
+        #st-wrapper.st-is-collapsed #st-header {
+          border-bottom: none;
+          border-radius: 13px;
+        }
       </style>
-      <div id="st-wrapper" style="
+      <div id="st-wrapper" class="${isCollapsed ? 'st-is-collapsed' : ''}" style="
         position: fixed; top: ${savedPos.top}px; left: ${savedPos.left}px; width: 330px;
         background: rgba(18, 20, 32, 0.94); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
         border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 14px;
@@ -107,20 +166,24 @@
         max-height: calc(100vh - 40px); transition: width 0.25s ease, opacity 0.2s ease;
       ">
         <!-- Compact Bar (Shown only in Compact Mode) -->
-        <div id="st-compact-bar" style="display: ${isCompact ? 'flex' : 'none'}; align-items: center; justify-content: space-between; padding: 8px 12px; background: linear-gradient(135deg, rgba(253, 41, 123, 0.85), rgba(255, 101, 91, 0.85)); flex-shrink: 0;">
+        <div id="st-compact-bar" style="display: ${isCompact ? 'flex' : 'none'}; align-items: center; justify-content: space-between; padding: 6px 10px; background: linear-gradient(135deg, rgba(253, 41, 123, 0.88), rgba(255, 101, 91, 0.88)); flex-shrink: 0;">
           <div style="font-weight: 800; font-size: 13px; display: flex; align-items: center; gap: 6px;">
-            <span>🔥</span>
-            <span id="st-compact-likes" style="font-size: 13px;">${likeCount}</span>
-            <span style="opacity: 0.6; font-size: 10px;">L</span>
-            <span style="opacity: 0.4;">|</span>
-            <span id="st-compact-passes" style="font-size: 13px; color: #ff9e9e;">${passCount}</span>
-            <span style="opacity: 0.6; font-size: 10px;">P</span>
+            <span style="display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; background: rgba(0,0,0,0.2); border-radius: 5px; font-size: 11px;">🔥</span>
+            <span id="st-compact-likes" style="font-size: 12px; font-weight: 800; color: #4ade80;">${likeCount}</span>
+            <span style="opacity: 0.5; font-size: 9px; font-weight: bold;">L</span>
+            <span style="opacity: 0.3;">|</span>
+            <span id="st-compact-passes" style="font-size: 12px; font-weight: 800; color: #ff9e9e;">${passCount}</span>
+            <span style="opacity: 0.5; font-size: 9px; font-weight: bold;">P</span>
           </div>
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <button id="st-compact-toggle-run" title="Start / Stop" style="background: rgba(0,0,0,0.25); border: none; border-radius: 4px; color: #fff; font-size: 12px; padding: 2px 6px; cursor: pointer;">
-              ${isLiking ? '⏸️' : '▶️'}
+          <div style="display: flex; align-items: center; gap: 5px;">
+            <button id="st-compact-toggle-run" class="st-header-btn" title="${isLiking ? 'Stop Automation' : 'Start Automation'}" style="width: 24px; height: 24px;">
+              ${isLiking ? `
+              <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" style="width: 10px; height: 10px;"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg>` : `
+              <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" style="width: 10px; height: 10px;"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`}
             </button>
-            <button id="st-expand-btn" title="Expand Widget" style="background: none; border: none; color: #fff; font-size: 14px; cursor: pointer; padding: 0 2px;">❐</button>
+            <button id="st-expand-btn" class="st-header-btn" title="Expand Widget" style="width: 24px; height: 24px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 11px; height: 11px;"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
+            </button>
           </div>
         </div>
 
@@ -128,20 +191,30 @@
         <div id="st-full-ui" style="display: ${isCompact ? 'none' : 'flex'}; flex-direction: column; flex: 1; min-height: 0; overflow: hidden;">
           <!-- Draggable Header -->
           <div id="st-header" style="
-            padding: 10px 12px; background: linear-gradient(135deg, rgba(253, 41, 123, 0.9), rgba(255, 101, 91, 0.9));
+            padding: 8px 12px; background: linear-gradient(135deg, rgba(253, 41, 123, 0.94), rgba(255, 101, 91, 0.94));
             cursor: grab; font-weight: 700; font-size: 13px; display: flex; justify-content: space-between; align-items: center;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1); flex-shrink: 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.12); flex-shrink: 0;
           ">
-            <span style="display: flex; align-items: center; gap: 6px;">
-              <span>🔥</span>
-              <span>Smart Tinder</span>
+            <span style="display: flex; align-items: center; gap: 7px;">
+              <span style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; background: rgba(0,0,0,0.22); border-radius: 6px; font-size: 12px;">🔥</span>
+              <span style="font-weight: 800; font-size: 13px; letter-spacing: -0.2px; text-shadow: 0 1px 2px rgba(0,0,0,0.2);">Smart Tinder</span>
             </span>
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <button id="st-kofi-header-btn" title="Support Developer on Ko-fi (Buy me a coffee)" style="background: none; border: none; color: white; cursor: pointer; font-size: 11px; padding: 0 2px; opacity: 0.85;">☕</button>
-              <button id="st-check-update-btn" title="Check for Updates" style="background: none; border: none; color: white; cursor: pointer; font-size: 11px; padding: 0 2px; opacity: 0.75;">🔄</button>
-              <button id="st-devtools-btn" title="Toggle Developer Console (F12 or Cmd+Option+I)" style="background: none; border: none; color: white; cursor: pointer; font-size: 11px; padding: 0 2px; opacity: 0.75;">🛠️</button>
-              <button id="st-compact-btn" title="Compact Mode" style="background: none; border: none; color: white; cursor: pointer; font-size: 12px; padding: 0 3px; opacity: 0.9;">🗕</button>
-              <button id="st-collapse" title="Minimize Body" style="background: none; border: none; color: white; cursor: pointer; font-size: 12px; padding: 0 3px; opacity: 0.9;">${isCollapsed ? '▲' : '▼'}</button>
+            <div style="display: flex; align-items: center; gap: 5px;">
+              <button id="st-kofi-header-btn" class="st-header-btn" title="Support Developer on Ko-fi (Buy me a coffee)" aria-label="Support on Ko-fi">
+                <svg viewBox="0 0 24 24"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg>
+              </button>
+              <button id="st-check-update-btn" class="st-header-btn" title="Check for Updates" aria-label="Check for Updates">
+                <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+              </button>
+              <button id="st-devtools-btn" class="st-header-btn" title="Toggle Developer Console (F12 or Cmd+Option+I)" aria-label="Toggle Developer Console">
+                <svg viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+              </button>
+              <button id="st-compact-btn" class="st-header-btn" title="Compact Mode" aria-label="Compact Mode">
+                <svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="4" rx="1.5"></rect></svg>
+              </button>
+              <button id="st-collapse" class="st-header-btn ${isCollapsed ? 'st-collapsed-active' : ''}" title="${isCollapsed ? 'Expand Widget' : 'Collapse Widget'}" aria-label="Collapse / Expand">
+                <svg id="st-collapse-icon" viewBox="0 0 24 24" style="transform: ${isCollapsed ? 'rotate(180deg)' : 'rotate(0deg)'};"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
             </div>
           </div>
           
@@ -157,19 +230,21 @@
             </div>
           </div>
           
-          <!-- Tab Navigation Bar -->
-          <div id="st-tabs" style="display: flex; background: rgba(0,0,0,0.35); border-bottom: 1px solid rgba(255,255,255,0.08); flex-shrink: 0;">
-            <button id="st-tab-main" style="flex: 1; padding: 8px 10px; background: rgba(255,255,255,0.08); border: none; border-bottom: 2px solid #fd297b; color: #fff; font-size: 11px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; transition: all 0.2s;">
-              <span>⚡ Swiper</span>
-            </button>
-            <button id="st-tab-criteria" style="flex: 1; padding: 8px 10px; background: transparent; border: none; border-bottom: 2px solid transparent; color: rgba(255,255,255,0.6); font-size: 11px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s;">
-              <span>🛡️ Criteria</span>
-              <span id="st-tab-badge" style="font-size: 9px; background: #fd297b; color: white; padding: 1px 6px; border-radius: 10px; font-weight: bold;">${savedKeywords.length}</span>
-            </button>
-          </div>
-          
-          <!-- Scrollable Body -->
-          <div id="st-body" style="padding: 12px; display: ${isCollapsed ? 'none' : 'flex'}; flex-direction: column; overflow-y: auto; overflow-x: hidden; flex: 1; min-height: 0;">
+          <!-- Collapsible Content Wrapper (Both Tabs and Body) -->
+          <div id="st-collapsible" style="display: ${isCollapsed ? 'none' : 'flex'}; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; position: relative;">
+            <!-- Tab Navigation Bar -->
+            <div id="st-tabs" style="display: flex; background: rgba(0,0,0,0.35); border-bottom: 1px solid rgba(255,255,255,0.08); flex-shrink: 0;">
+              <button id="st-tab-main" style="flex: 1; padding: 8px 10px; background: rgba(255,255,255,0.08); border: none; border-bottom: 2px solid #fd297b; color: #fff; font-size: 11px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; transition: all 0.2s;">
+                <span>⚡ Swiper</span>
+              </button>
+              <button id="st-tab-criteria" style="flex: 1; padding: 8px 10px; background: transparent; border: none; border-bottom: 2px solid transparent; color: rgba(255,255,255,0.6); font-size: 11px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s;">
+                <span>🛡️ Criteria</span>
+                <span id="st-tab-badge" style="font-size: 9px; background: #fd297b; color: white; padding: 1px 6px; border-radius: 10px; font-weight: bold;">${savedKeywords.length}</span>
+              </button>
+            </div>
+            
+            <!-- Scrollable Body -->
+            <div id="st-body" style="padding: 12px; display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; flex: 1; min-height: 0;">
             
             <!-- PANEL 1: MAIN SWIPER CONTROLS -->
             <div id="st-panel-main" style="display: flex; flex-direction: column; gap: 10px;">
@@ -400,8 +475,10 @@
                 <button id="st-modal-cancel" style="padding: 7px 12px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff; font-size: 10px; cursor: pointer;">Close</button>
               </div>
             </div>
+          </div>
         </div>
       </div>
+    </div>
     `;
 
     const container = document.createElement('div');
@@ -413,6 +490,8 @@
     const fullUi = document.getElementById('st-full-ui');
     const compactBar = document.getElementById('st-compact-bar');
     const header = document.getElementById('st-header');
+    const collapsibleEl = document.getElementById('st-collapsible');
+    const collapseIcon = document.getElementById('st-collapse-icon');
     const bodyEl = document.getElementById('st-body');
     const devtoolsBtn = document.getElementById('st-devtools-btn');
     const collapseBtn = document.getElementById('st-collapse');
@@ -690,6 +769,8 @@
     if (checkUpdateBtn) {
       checkUpdateBtn.addEventListener('click', () => {
         try {
+          checkUpdateBtn.classList.add('st-spin');
+          setTimeout(() => checkUpdateBtn.classList.remove('st-spin'), 1200);
           statusEl.textContent = 'Checking for updates...';
           const { ipcRenderer } = require('electron');
           ipcRenderer.send('st-check-for-updates');
@@ -978,11 +1059,16 @@
       }
     });
 
-    // Collapse
+    // Collapse / Expand
     collapseBtn.addEventListener('click', () => {
       isCollapsed = !isCollapsed;
-      bodyEl.style.display = isCollapsed ? 'none' : 'flex';
-      collapseBtn.textContent = isCollapsed ? '▼' : '▲';
+      if (collapsibleEl) collapsibleEl.style.display = isCollapsed ? 'none' : 'flex';
+      collapseBtn.classList.toggle('st-collapsed-active', isCollapsed);
+      if (collapseIcon) {
+        collapseIcon.style.transform = isCollapsed ? 'rotate(180deg)' : 'rotate(0deg)';
+      }
+      collapseBtn.setAttribute('title', isCollapsed ? 'Expand Widget' : 'Collapse Widget');
+      wrapper.classList.toggle('st-is-collapsed', isCollapsed);
       setStored('st-collapsed', isCollapsed);
     });
 
@@ -1001,8 +1087,16 @@
       } else {
         compactBar.style.display = 'none';
         fullUi.style.display = 'flex';
-        wrapper.style.width = '320px';
+        wrapper.style.width = '330px';
       }
+    }
+
+    function updateCompactRunButton(running) {
+      if (!compactToggleRun) return;
+      compactToggleRun.innerHTML = running
+        ? `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none" style="width: 10px; height: 10px;"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg>`
+        : `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none" style="width: 10px; height: 10px;"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
+      compactToggleRun.setAttribute('title', running ? 'Stop Automation' : 'Start Automation');
     }
 
     compactBtn.addEventListener('click', () => setCompactMode(true));
@@ -1928,7 +2022,7 @@
       stopBtn.style.color = '#ff4b4b';
       stopBtn.disabled = false;
 
-      compactToggleRun.textContent = '⏸️';
+      updateCompactRunButton(true);
       emptySwipeCount = 0;
       emptyCategoryStartTime = null;
       consecutiveMissedCardCount = 0;
@@ -1956,7 +2050,7 @@
       stopBtn.style.color = '#fff';
       stopBtn.disabled = true;
 
-      compactToggleRun.textContent = '▶️';
+      updateCompactRunButton(false);
       statusEl.textContent = 'Paused.';
     }
 
