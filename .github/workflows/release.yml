@@ -93,7 +93,8 @@ jobs:
             dist/*.exe
             dist/*.AppImage
             dist/*.deb
-          generate_release_notes: true
+          body_path: RELEASE_NOTES.md
+          name: v${{ github.ref_name }} - Initial Release & Cross-Platform Launch
           draft: false
           prerelease: false
         env:
