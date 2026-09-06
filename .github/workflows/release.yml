@@ -94,7 +94,7 @@ jobs:
             dist/*.AppImage
             dist/*.deb
           body_path: RELEASE_NOTES.md
-          name: v${{ github.ref_name }} - Initial Release & Cross-Platform Launch
+          name: ${{ github.ref_name }} - Initial Release & Cross-Platform Launch
           draft: false
           prerelease: false
         env:
