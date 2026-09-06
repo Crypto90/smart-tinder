@@ -1,4 +1,4 @@
-## 🔥 Smart Tinder v1.0.1
+# v1.0.1 - Empty Category Detection & Auto-Transition
 
 We are pleased to release **Smart Tinder v1.0.1**! This update introduces intelligent **Empty Category Detection**, continuous **5-second anti-false-positive loading verification**, seamless **SPA category navigation**, and enhanced profile card container isolation.
 

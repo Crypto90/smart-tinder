@@ -84,6 +84,23 @@ jobs:
           path: dist/
           merge-multiple: true
 
+      - name: Determine Release Title
+        id: release_title
+        run: |
+          TAG="${{ github.ref_name }}"
+          RAW_HEADER=$(head -n 1 RELEASE_NOTES.md | sed -E 's/^#+[[:space:]]*//' | sed -E 's/^[🔥⚡✨🎉 ]+//' | xargs)
+          if [[ "$RAW_HEADER" == "$TAG - "* ]]; then
+            TITLE="$RAW_HEADER"
+          elif [[ "$RAW_HEADER" == *" - "* ]]; then
+            SUBTITLE="${RAW_HEADER#* - }"
+            TITLE="$TAG - $SUBTITLE"
+          elif [ -n "$RAW_HEADER" ]; then
+            TITLE="$TAG - $RAW_HEADER"
+          else
+            TITLE="$TAG - Update"
+          fi
+          echo "title=$TITLE" >> $GITHUB_OUTPUT
+
       - name: Publish Single Clean Release
         uses: softprops/action-gh-release@v2
         with:
@@ -94,7 +111,7 @@ jobs:
             dist/*.AppImage
             dist/*.deb
           body_path: RELEASE_NOTES.md
-          name: Smart Tinder ${{ github.ref_name }}
+          name: ${{ steps.release_title.outputs.title }}
           draft: false
           prerelease: false
         env:
