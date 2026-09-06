@@ -63,4 +63,15 @@ We are thrilled to announce the official **v1.0.0** release of **Smart Tinder** 
 - **Zero Telemetry**: No credentials, swipes, or profile data are ever sent to external servers.
 
 ---
+
+### ☕ Support the Developer
+If **Smart Tinder** saves you time and enhances your matching experience, please consider buying me a coffee to support continued development and maintenance:
+
+<div align="center">
+
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Donate-orange?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/crypto90?ref=smart-tinder-release)
+
+</div>
+
+---
 **Full Changelog**: https://github.com/Crypto90/smart-tinder/commits/v1.0.0

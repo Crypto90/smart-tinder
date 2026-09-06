@@ -136,6 +136,7 @@
               <span>Smart Tinder</span>
             </span>
             <div style="display: flex; align-items: center; gap: 6px;">
+              <button id="st-kofi-header-btn" title="Support Developer on Ko-fi (Buy me a coffee)" style="background: none; border: none; color: white; cursor: pointer; font-size: 11px; padding: 0 2px; opacity: 0.85;">☕</button>
               <button id="st-check-update-btn" title="Check for Updates" style="background: none; border: none; color: white; cursor: pointer; font-size: 11px; padding: 0 2px; opacity: 0.75;">🔄</button>
               <button id="st-devtools-btn" title="Toggle Developer Console (F12 or Cmd+Option+I)" style="background: none; border: none; color: white; cursor: pointer; font-size: 11px; padding: 0 2px; opacity: 0.75;">🛠️</button>
               <button id="st-compact-btn" title="Compact Mode" style="background: none; border: none; color: white; cursor: pointer; font-size: 12px; padding: 0 3px; opacity: 0.9;">🗕</button>
@@ -377,6 +378,11 @@
                 <button id="st-export-btn" style="flex: 1; padding: 6px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: #fff; font-size: 10px; font-weight: 600; cursor: pointer;">💾 Export JSON</button>
                 <button id="st-import-btn" style="flex: 1; padding: 6px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: #fff; font-size: 10px; font-weight: 600; cursor: pointer;">📥 Import JSON</button>
               </div>
+
+              <!-- Support Developer / Buy Me a Coffee -->
+              <button id="st-support-btn" style="width: 100%; padding: 7px; background: linear-gradient(135deg, #ff5e5b, #ff8c42); border: none; border-radius: 6px; color: white; font-size: 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 3px 10px rgba(255, 94, 91, 0.35);">
+                <span>☕ Buy Me a Coffee (Support on Ko-fi)</span>
+              </button>
 
               <button id="st-back-to-swiper" style="width: 100%; padding: 8px; background: linear-gradient(135deg, rgba(253, 41, 123, 0.85), rgba(255, 101, 91, 0.85)); border: none; border-radius: 6px; color: white; font-size: 11px; font-weight: bold; cursor: pointer; margin-top: 4px; box-shadow: 0 4px 12px rgba(253,41,123,0.3);">✓ Done (Back to Swiper)</button>
             </div>
@@ -688,6 +694,32 @@
           ipcRenderer.send('st-check-for-updates');
         } catch (e) {
           console.warn('Could not check for updates:', e);
+        }
+      });
+    }
+
+    // --- Ko-fi Support / Buy Me a Coffee Controls ---
+    const kofiHeaderBtn = document.getElementById('st-kofi-header-btn');
+    const supportBtn = document.getElementById('st-support-btn');
+
+    if (kofiHeaderBtn) {
+      kofiHeaderBtn.addEventListener('click', () => {
+        try {
+          const { ipcRenderer } = require('electron');
+          ipcRenderer.send('st-open-url', 'https://ko-fi.com/crypto90?ref=smart-tinder-app-header');
+        } catch (e) {
+          window.open('https://ko-fi.com/crypto90?ref=smart-tinder-app-header', '_blank');
+        }
+      });
+    }
+
+    if (supportBtn) {
+      supportBtn.addEventListener('click', () => {
+        try {
+          const { ipcRenderer } = require('electron');
+          ipcRenderer.send('st-open-url', 'https://ko-fi.com/crypto90?ref=smart-tinder-app');
+        } catch (e) {
+          window.open('https://ko-fi.com/crypto90?ref=smart-tinder-app', '_blank');
         }
       });
     }

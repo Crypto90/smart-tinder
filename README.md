@@ -14,6 +14,7 @@ Featuring deterministic negative filtering, human-like interaction loops, catego
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey?style=for-the-badge)](https://github.com/Crypto90/smart-tinder)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
+[![Ko-Fi](https://img.shields.io/badge/Support-Buy%20Me%20A%20Coffee-ff5e5b?logo=kofi&style=for-the-badge)](https://ko-fi.com/crypto90?ref=smart-tinder-badge)
 
 </div>
 
@@ -188,6 +189,18 @@ smart-tinder/
 - **Direct Web Access**: Connects directly to `https://tinder.com` inside an isolated Chromium web context.
 - **No Third-Party APIs**: All processing (filtering, evaluations, queue management) runs locally on your machine. No telemetry, credentials, or profile data are collected or sent externally.
 - **Persistent Local Storage**: Widget settings and criteria are stored strictly in your local `localStorage`.
+
+---
+
+## ☕ Support the Project
+
+If **Smart Tinder** saves you time and helps you match with the right people, please consider buying me a coffee to support ongoing updates and maintenance:
+
+<div align="center">
+
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Donate-orange?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/crypto90?ref=smart-tinder-readme)
+
+</div>
 
 ---
 
