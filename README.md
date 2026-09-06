@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/banner.jpg" alt="Smart Tinder Banner" width="100%" style="border-radius: 12px; margin-bottom: 20px;" />
+
 # 🔥 Smart Tinder
 
 **An intelligent, automated assistant and criteria filter engine for Tinder Web.**  
@@ -9,7 +11,7 @@ Featuring deterministic negative filtering, human-like interaction loops, catego
 
 [![Electron](https://img.shields.io/badge/Electron-32.x-47848F?style=for-the-badge&logo=electron&logoColor=white)](https://www.electronjs.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
-[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey?style=for-the-badge)](https://github.com/)
+[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey?style=for-the-badge)](https://github.com/Crypto90/smart-tinder)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 
 </div>
@@ -21,6 +23,11 @@ Featuring deterministic negative filtering, human-like interaction loops, catego
 **Smart Tinder** is a standalone Electron desktop application that wraps Tinder Web with an unobtrusive, floating glassmorphic control widget. It eliminates tedious manual swiping while giving you granular, deterministic control over which profiles you match with.
 
 Instead of blind mass-swiping or random heuristics, Smart Tinder inspects profile content (bios, lifestyle pills, pronouns, relationship intent, and distance) against customizable criteria before dispatching any action.
+
+<div align="center" style="margin: 24px 0;">
+  <img src="assets/mockup.jpg" alt="Smart Tinder Desktop App Mockup" width="92%" style="border-radius: 12px; box-shadow: 0 12px 36px rgba(0,0,0,0.6);" />
+  <p><em>Desktop application with the floating glassmorphic HUD: Live Decision Feed, real-time counters, and anti-shadowban cooldown controls.</em></p>
+</div>
 
 ---
 
@@ -75,7 +82,7 @@ Instead of blind mass-swiping or random heuristics, Smart Tinder inspects profil
 
 1. **Clone the repository:**
    ```bash
-   git clone https://forgejo.shieldserver.de/Crypto90/smart-tinder.git
+   git clone https://github.com/Crypto90/smart-tinder.git
    cd smart-tinder
    ```
 
@@ -84,7 +91,12 @@ Instead of blind mass-swiping or random heuristics, Smart Tinder inspects profil
    npm install
    ```
 
-3. **Start the application:**
+3. **Run automated test suite:**
+   ```bash
+   npm test
+   ```
+
+4. **Start the application:**
    ```bash
    npm start
    ```
@@ -124,9 +136,11 @@ Instead of blind mass-swiping or random heuristics, Smart Tinder inspects profil
 
 ```
 smart-tinder/
+├── assets/         # App banner, interface mockups, and media
 ├── main.js         # Electron main process (lifecycle, window creation, CSP bypass, IPC)
 ├── preload.js      # Automation engine, criteria evaluation, DOM injection & HUD
-├── package.json    # Project manifest and scripts
+├── test_suite.js   # Automated unit test runner (10 verification suites)
+├── package.json    # Project manifest, scripts, and dependencies
 └── .gitignore      # Git exclusion rules
 ```
 
