@@ -84,6 +84,13 @@ Download the latest version directly from the [**GitHub Releases**](https://gith
 > [!TIP]
 > **Automatic Update Checker**: Smart Tinder automatically checks GitHub for newer releases on startup and displays an in-app banner (`🚀 Update available!`) with a 1-click update link. You can also manually check anytime via the `🔄` header button.
 
+> [!NOTE]
+> **macOS "App is Damaged" Notice**: Because Smart Tinder is an open-source project without a paid Apple Developer certificate, macOS Gatekeeper quarantines apps downloaded from the web. If you see *"Smart Tinder is damaged and can't be opened"*, run this one-line command in Terminal to allow it:
+> ```bash
+> xattr -cr /Applications/"Smart Tinder.app"
+> ```
+> *(Or if you extracted the zip in Downloads: `xattr -cr ~/Downloads/"Smart Tinder.app"`)*
+
 ---
 
 ## 🚀 Getting Started
