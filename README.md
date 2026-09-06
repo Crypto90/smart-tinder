@@ -31,25 +31,34 @@ Instead of blind mass-swiping or random heuristics, Smart Tinder inspects profil
 - **Categorized Presets (One-Click Toggles)**:
   - ⚧️ **Gender & Pronouns**: `he/him`, `they/them`, `er/ihn`, `she/they`, `trans`, `transgender`, `ladyboy`, `crossdresser`, `t-girl`, `shemale`, `ftm`, `mtf`
   - 👥 **Couples & Poly**: `couple`, `looking for third`, `dreier`, `paar`, `unicorn`
-  - 💸 **Promo & Spam**: `onlyfans`, `cashapp`, `paypal.me`, `sugar baby`, `insta:`, `ig:`
+  - 💸 **Promo & Spam**: `onlyfans`, `cashapp`, `paypal.me`, `sugar baby`, `insta:`, `ig:`, `snap:`, `sc:`
+- **Advanced Profile Filters**:
+  - 📝 **Bio Required**: Auto-passes profiles with empty or low-effort bios (< 6 characters).
+  - ☑️ **Verified Only**: Auto-passes unverified accounts lacking Tinder's blue checkmark.
+  - 🎂 **Age Range Cap**: Enforce strict minimum and maximum age brackets directly in the HUD.
 - **Custom Keywords**: Add any custom keyword or phrase with instant chip management.
 - **Maximum Distance Cap**: Set a maximum distance in kilometers (`0` to disable). Profiles exceeding this range are passed automatically.
 - **Configurable Pass Rate**: Random pass rate slider (0% to 50%). Set to `0%` for 100% likes on all passing profiles.
+- **Preset Portability**: 1-click JSON Export & Import to backup, restore, and swap configuration profiles.
 
-### ⚡ Human-Like Swiping Automation
+### ⚡ Human-Like Swiping Automation & Anti-Detection
 - **Natural Timing**: Configurable base speed (0.5s – 5.0s) plus random jitter delays (0.0s – 3.0s) to mimic human rhythm.
+- **☕ Anti-Shadowban Cooldowns**: Natural periodic breaks (40–60s) every 20–30 swipes with a live countdown and instant `[Skip Break]` option.
+- **Micro-Inspection Simulation**: Subtle 15% random photo viewing pauses before deciding to mimic natural gaze patterns.
 - **Dual-Action Fallback Engine**: Dispatches native keyboard arrow events (`ArrowRight` / `ArrowLeft`) with an automated button-click fallback after 350ms if the DOM card doesn't advance.
 - **Anti-Stall & Popup Dismissal**: Automatically closes match modals (*"Keep Swiping"* / *"Weiterswipen"*), system dialogs (*"Not now"*, *"Nicht jetzt"*), and paywall popups across languages (English & German).
 
 ### 🗂️ Explore Category Looping & Queue Management
+- **Zero Page Reload Navigation**: Fast, native client-side SPA navigation between Explore categories and regular stacks with no page flushes.
 - **Category Scanner**: Detects all active Tinder Explore categories (`/app/explore/...`) and lets you select which stacks to swipe.
 - **Category Swipe Limits**: Configurable per-category swipe budget (10 – 250 swipes).
 - **Auto-Loop Mode**: Automatically rotates through selected categories and restarts the queue once exhausted.
 
 ### 🎨 Modern Glassmorphic HUD
 - **Tabbed Interface**:
-  - **`⚡ Swiper`**: Real-time Likes/Passes counters, Start/Stop buttons, speed sliders, and category queue progress.
-  - **`🛡️ Criteria`**: Full-height dedicated tag manager with live active badge counts.
+  - **`⚡ Swiper`**: Real-time Likes/Passes counters, Category progress, Live Decision Feed, Cooldown toggles, and speed sliders.
+  - **`🛡️ Criteria`**: Full-height dedicated tag manager with active badge counts, advanced filters, distance, age, and JSON preset export/import.
+- **📋 Live Decision Feed**: Real-time audit log of the last 10 profile evaluations (name, age, action, reason, timestamp) and neon card glow visual feedback.
 - **Draggable & Dockable**: Move the widget anywhere on screen with boundary clamping; position persists across reloads.
 - **Compact Mode**: Collapse into an ultra-minimal horizontal status bar (`🗕`).
 - **Developer Console Integration**: Clean startup with DevTools hidden by default. Toggle anytime via the `🛠️` header button or standard shortcuts (`F12`, `Cmd+Option+I`).

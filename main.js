@@ -1,5 +1,7 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
+// Suppress Chromium AudioThreadHangMonitor noise on macOS
+app.commandLine.appendSwitch('disable-features', 'AudioThreadHangMonitor');
 
 let mainWindow;
 
@@ -42,22 +44,6 @@ function createWindow() {
   // Prevent window from being garbage collected
   mainWindow.on('closed', function () {
     mainWindow = null;
-  });
-
-  // TEMPORARY DEBUG: Dump DOM elements when on explore page
-  mainWindow.webContents.on('did-navigate-in-page', (event, url) => {
-    if (url.includes('explore')) {
-      setTimeout(() => {
-        if (!mainWindow || mainWindow.isDestroyed()) return;
-        mainWindow.webContents.executeJavaScript(`
-          (function() {
-            const links = Array.from(document.querySelectorAll('a, div, button'));
-            const filtered = links.map(el => el.outerHTML).filter(h => typeof h === 'string' && (h.includes('/explore') || h.includes('/app/explore')) && h.length < 500);
-            return filtered.join('\\n---SPLIT---\\n');
-          })();
-        `).then(result => console.log("====== DOM DUMP START ======\\n", result, "\\n====== DOM DUMP END ======")).catch(console.error);
-      }, 5000); // Wait 5s for react to render
-    }
   });
 }
 

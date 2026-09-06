@@ -36,6 +36,11 @@
     let passRate = parseInt(getStored('st-passRate', 0), 10); // 0% means 100% Right Swipes on passing profiles
     let autoLoop = getStored('st-autoLoop', true);
     let maxDistance = parseInt(getStored('st-maxDist', 0), 10); // 0 = disabled
+    let minAge = parseInt(getStored('st-minAge', 18), 10);
+    let maxAge = parseInt(getStored('st-maxAge', 0), 10); // 0 = off
+    let requireBio = getStored('st-reqBio', false);
+    let verifiedOnly = getStored('st-verifiedOnly', false);
+    let humanCooldowns = getStored('st-cooldowns', true);
     let savedCategories = getStored('st-categories', []);
     let enabledCats = getStored('st-enabledCats', ['/app/recs']);
     let isCompact = getStored('st-compact', false);
@@ -57,7 +62,7 @@
       {
         title: 'Promo & Spam',
         icon: '💸',
-        tags: ['onlyfans', 'cashapp', 'paypal.me', 'sugar baby', 'insta:', 'ig:']
+        tags: ['onlyfans', 'cashapp', 'paypal.me', 'sugar baby', 'insta:', 'ig:', 'snap:', 'sc:']
       }
     ];
     const allPresetTags = PRESET_GROUPS.flatMap(g => g.tags);
@@ -74,8 +79,14 @@
     // Runtime execution variables
     let activeTimeoutId = null;
     let emptySwipeCount = 0;
+    let consecutiveMissedCardCount = 0;
     let loopHasProfiles = false;
     let lastProfileIdentifier = '';
+    let activityLog = [];
+    let swipesSinceBreak = 0;
+    let currentBreakTarget = Math.floor(Math.random() * 11) + 20; // 20 - 30 swipes
+    let breakTimerId = null;
+    let isBreakActive = false;
 
     // --- 2. Build Glassmorphic UI ---
     const overlayHTML = `
@@ -219,10 +230,21 @@
                 <span style="font-size: 10px; color: #fd297b; font-weight: bold;">Manage →</span>
               </div>
 
-              <!-- Auto-Loop Toggle -->
-              <label style="font-size: 11px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                <input type="checkbox" id="st-autoloop" ${autoLoop ? 'checked' : ''} style="accent-color: #fd297b; cursor: pointer;"> Auto-Loop Categories
-              </label>
+              <!-- Auto-Loop & Cooldowns Row -->
+              <div style="display: flex; flex-direction: column; gap: 6px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 6px 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <label style="font-size: 10px; display: flex; align-items: center; gap: 6px; cursor: pointer; color: #fff;">
+                    <input type="checkbox" id="st-autoloop" ${autoLoop ? 'checked' : ''} style="accent-color: #fd297b; cursor: pointer;"> Auto-Loop Categories
+                  </label>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <label style="font-size: 10px; display: flex; align-items: center; gap: 6px; cursor: pointer; color: #fff;">
+                    <input type="checkbox" id="st-cooldowns" ${humanCooldowns ? 'checked' : ''} style="accent-color: #fd297b; cursor: pointer;">
+                    <span>☕ Human Cooldowns</span>
+                  </label>
+                  <button id="st-skip-break" style="display: none; background: rgba(253,41,123,0.3); border: 1px solid #fd297b; border-radius: 4px; color: #fff; font-size: 9px; font-weight: bold; padding: 2px 6px; cursor: pointer;">Skip Break ⏩</button>
+                </div>
+              </div>
 
               <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 2px 0;">
               
@@ -236,14 +258,25 @@
                 </div>
               </div>
               
-              <div id="st-cat-list" style="display: flex; flex-direction: column; gap: 5px; font-size: 10px; max-height: 100px; overflow-y: auto; padding-right: 4px;">
+              <div id="st-cat-list" style="display: flex; flex-direction: column; gap: 5px; font-size: 10px; max-height: 90px; overflow-y: auto; padding-right: 4px;">
                 <!-- Dynamically populated -->
               </div>
 
               <!-- Queue Indicators -->
-              <div style="background: rgba(0,0,0,0.35); border-radius: 6px; padding: 6px 8px; font-size: 9px; color: #ccc;">
-                <div style="margin-bottom: 3px;"><strong style="color:#fff;">Active:</strong> <span id="st-current-queue" style="color:#fd297b; font-weight: bold;">None</span></div>
+              <div style="background: rgba(0,0,0,0.35); border-radius: 6px; padding: 5px 8px; font-size: 9px; color: #ccc;">
+                <div style="margin-bottom: 2px;"><strong style="color:#fff;">Active:</strong> <span id="st-current-queue" style="color:#fd297b; font-weight: bold;">None</span></div>
                 <div><strong style="color:#fff;">Next:</strong> <span id="st-next-queue">None</span></div>
+              </div>
+
+              <!-- Live Decision Feed -->
+              <div style="background: rgba(0,0,0,0.35); border-radius: 6px; padding: 6px 8px; font-size: 9px; display: flex; flex-direction: column; gap: 4px; border: 1px solid rgba(255,255,255,0.06);">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-weight: 700; color: rgba(255,255,255,0.8); text-transform: uppercase; font-size: 9px; letter-spacing: 0.5px;">📋 Live Decision Feed</span>
+                  <button id="st-feed-clear" style="background: none; border: none; color: rgba(255,255,255,0.4); font-size: 8px; text-decoration: underline; cursor: pointer; padding: 0;">Clear</button>
+                </div>
+                <div id="st-feed-list" style="display: flex; flex-direction: column; gap: 3px; max-height: 80px; overflow-y: auto; padding-right: 2px;">
+                  <span style="color: rgba(255,255,255,0.3); font-style: italic;">No decisions logged yet</span>
+                </div>
               </div>
 
               <!-- Status Display -->
@@ -259,6 +292,42 @@
             <div id="st-panel-criteria" style="display: none; flex-direction: column; gap: 10px;">
               <div style="font-size: 10px; color: rgba(255,255,255,0.7); line-height: 1.4; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 8px 10px;">
                 Auto-swipes <strong>LEFT (Pass)</strong> if matched in profile bio, tags, pronouns, or details. Click any preset pill to toggle ON / OFF:
+              </div>
+
+              <!-- Advanced Profile Filters -->
+              <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px;">
+                <span style="font-size: 10px; font-weight: bold; color: rgba(255,255,255,0.8); text-transform: uppercase; letter-spacing: 0.5px;">Advanced Filters</span>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <label style="font-size: 10px; color: rgba(255,255,255,0.8); display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                    <input type="checkbox" id="st-req-bio" ${requireBio ? 'checked' : ''} style="accent-color: #fd297b; cursor: pointer;">
+                    <span>📝 Bio Required (Pass empty)</span>
+                  </label>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <label style="font-size: 10px; color: rgba(255,255,255,0.8); display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                    <input type="checkbox" id="st-verified-only" ${verifiedOnly ? 'checked' : ''} style="accent-color: #fd297b; cursor: pointer;">
+                    <span>☑️ Verified Only (Pass unverified)</span>
+                  </label>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: rgba(255,255,255,0.8);">
+                  <span>🎂 Age Range:</span>
+                  <div style="display: flex; align-items: center; gap: 4px;">
+                    <input type="number" id="st-min-age" min="18" max="100" value="${minAge}" placeholder="18" style="width: 44px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: white; font-size: 10px; padding: 3px 4px; text-align: center;">
+                    <span>–</span>
+                    <input type="number" id="st-max-age" min="0" max="100" value="${maxAge}" placeholder="0=off" style="width: 44px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: white; font-size: 10px; padding: 3px 4px; text-align: center;">
+                  </div>
+                </div>
+
+                <div style="display: flex; align-items: center; justify-content: space-between; font-size: 10px; color: rgba(255,255,255,0.8);">
+                  <span>📍 Max Distance:</span>
+                  <div style="display: flex; align-items: center; gap: 4px;">
+                    <input type="number" id="st-max-dist" min="0" max="500" step="5" value="${maxDistance}" placeholder="0=off" style="width: 60px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: white; font-size: 10px; padding: 3px 4px; text-align: center;">
+                    <span>km</span>
+                  </div>
+                </div>
               </div>
 
               <!-- Presets Header & Action Buttons -->
@@ -290,13 +359,26 @@
                 </div>
               </div>
 
-              <!-- Distance Limit -->
-              <div style="display: flex; align-items: center; justify-content: space-between; font-size: 10px; color: rgba(255,255,255,0.8); background: rgba(0,0,0,0.25); padding: 6px 8px; border-radius: 6px;">
-                <span>Max Distance (km):</span>
-                <input type="number" id="st-max-dist" min="0" max="500" step="5" value="${maxDistance}" placeholder="0 = off" style="width: 60px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: white; font-size: 10px; padding: 4px 6px; text-align: center;">
+              <!-- Preset Portability (Export / Import JSON) -->
+              <div style="display: flex; gap: 6px;">
+                <button id="st-export-btn" style="flex: 1; padding: 6px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: #fff; font-size: 10px; font-weight: 600; cursor: pointer;">💾 Export JSON</button>
+                <button id="st-import-btn" style="flex: 1; padding: 6px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: #fff; font-size: 10px; font-weight: 600; cursor: pointer;">📥 Import JSON</button>
               </div>
 
               <button id="st-back-to-swiper" style="width: 100%; padding: 8px; background: linear-gradient(135deg, rgba(253, 41, 123, 0.85), rgba(255, 101, 91, 0.85)); border: none; border-radius: 6px; color: white; font-size: 11px; font-weight: bold; cursor: pointer; margin-top: 4px; box-shadow: 0 4px 12px rgba(253,41,123,0.3);">✓ Done (Back to Swiper)</button>
+            </div>
+
+            <!-- Configuration Modal Dialog (Export / Import) -->
+            <div id="st-config-modal" style="display: none; position: absolute; inset: 0; background: rgba(10, 12, 20, 0.96); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-radius: 14px; padding: 14px; flex-direction: column; gap: 10px; z-index: 1000000;">
+              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px;">
+                <span id="st-modal-title" style="font-size: 11px; font-weight: 700; color: #fff;">Preset Profile</span>
+                <button id="st-modal-close" style="background: none; border: none; color: #fff; cursor: pointer; font-size: 14px;">✕</button>
+              </div>
+              <textarea id="st-modal-textarea" style="flex: 1; width: 100%; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: #4ade80; font-family: monospace; font-size: 9px; padding: 8px; resize: none;"></textarea>
+              <div style="display: flex; gap: 6px;">
+                <button id="st-modal-action" style="flex: 1; padding: 7px; background: #fd297b; border: none; border-radius: 6px; color: #fff; font-size: 10px; font-weight: bold; cursor: pointer;">Copy to Clipboard</button>
+                <button id="st-modal-cancel" style="padding: 7px 12px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff; font-size: 10px; cursor: pointer;">Close</button>
+              </div>
             </div>
         </div>
       </div>
@@ -332,6 +414,10 @@
     const passRateEl = document.getElementById('st-passrate');
     const passRateValEl = document.getElementById('st-pass-val');
     const loopToggle = document.getElementById('st-autoloop');
+    const cooldownToggle = document.getElementById('st-cooldowns');
+    const skipBreakBtn = document.getElementById('st-skip-break');
+    const feedListEl = document.getElementById('st-feed-list');
+    const feedClearBtn = document.getElementById('st-feed-clear');
 
     const tabMainBtn = document.getElementById('st-tab-main');
     const tabCriteriaBtn = document.getElementById('st-tab-criteria');
@@ -349,6 +435,20 @@
     const kwSelectNoneBtn = document.getElementById('st-kw-none');
     const kwResetBtn = document.getElementById('st-kw-reset');
     const maxDistInput = document.getElementById('st-max-dist');
+
+    const reqBioToggle = document.getElementById('st-req-bio');
+    const verifiedOnlyToggle = document.getElementById('st-verified-only');
+    const minAgeInput = document.getElementById('st-min-age');
+    const maxAgeInput = document.getElementById('st-max-age');
+    const exportBtn = document.getElementById('st-export-btn');
+    const importBtn = document.getElementById('st-import-btn');
+
+    const modalContainer = document.getElementById('st-config-modal');
+    const modalTitle = document.getElementById('st-modal-title');
+    const modalTextarea = document.getElementById('st-modal-textarea');
+    const modalActionBtn = document.getElementById('st-modal-action');
+    const modalCancelBtn = document.getElementById('st-modal-cancel');
+    const modalCloseBtn = document.getElementById('st-modal-close');
 
     const startBtn = document.getElementById('st-start');
     const stopBtn = document.getElementById('st-stop');
@@ -547,6 +647,109 @@
       setStored('st-maxDist', maxDistance);
     });
 
+    reqBioToggle.addEventListener('change', (e) => {
+      requireBio = e.target.checked;
+      setStored('st-reqBio', requireBio);
+    });
+
+    verifiedOnlyToggle.addEventListener('change', (e) => {
+      verifiedOnly = e.target.checked;
+      setStored('st-verifiedOnly', verifiedOnly);
+    });
+
+    minAgeInput.addEventListener('change', (e) => {
+      minAge = parseInt(e.target.value || '18', 10);
+      setStored('st-minAge', minAge);
+    });
+
+    maxAgeInput.addEventListener('change', (e) => {
+      maxAge = parseInt(e.target.value || '0', 10);
+      setStored('st-maxAge', maxAge);
+    });
+
+    cooldownToggle.addEventListener('change', (e) => {
+      humanCooldowns = e.target.checked;
+      setStored('st-cooldowns', humanCooldowns);
+    });
+
+    skipBreakBtn.addEventListener('click', skipCooldownBreak);
+    feedClearBtn.addEventListener('click', () => {
+      activityLog = [];
+      renderActivityFeed();
+    });
+
+    // Preset Export / Import Dialog Handlers
+    function showConfigModal(title, text, isImportMode) {
+      modalTitle.textContent = title;
+      modalTextarea.value = text;
+      modalTextarea.readOnly = !isImportMode;
+      modalContainer.style.display = 'flex';
+
+      if (isImportMode) {
+        modalActionBtn.textContent = 'Apply Settings';
+        modalActionBtn.onclick = () => {
+          try {
+            const parsed = JSON.parse(modalTextarea.value);
+            if (parsed.savedKeywords && Array.isArray(parsed.savedKeywords)) {
+              savedKeywords = parsed.savedKeywords;
+              setStored('st-keywords', savedKeywords);
+            }
+            if (typeof parsed.speed === 'number') { speed = parsed.speed; setStored('st-speed', speed); speedEl.value = speed; speedValEl.textContent = `${speed}s`; }
+            if (typeof parsed.randDelay === 'number') { randDelay = parsed.randDelay; setStored('st-rand', randDelay); randEl.value = randDelay; randValEl.textContent = `${randDelay}s`; }
+            if (typeof parsed.maxSwipesPerCat === 'number') { maxSwipesPerCat = parsed.maxSwipesPerCat; setStored('st-limit', maxSwipesPerCat); limitEl.value = maxSwipesPerCat; limitValEl.textContent = maxSwipesPerCat; }
+            if (typeof parsed.passRate === 'number') { passRate = parsed.passRate; setStored('st-passRate', passRate); passRateEl.value = passRate; passRateValEl.textContent = `${passRate}%`; }
+            if (typeof parsed.maxDistance === 'number') { maxDistance = parsed.maxDistance; setStored('st-maxDist', maxDistance); maxDistInput.value = maxDistance; }
+            if (typeof parsed.minAge === 'number') { minAge = parsed.minAge; setStored('st-minAge', minAge); minAgeInput.value = minAge; }
+            if (typeof parsed.maxAge === 'number') { maxAge = parsed.maxAge; setStored('st-maxAge', maxAge); maxAgeInput.value = maxAge; }
+            if (typeof parsed.requireBio === 'boolean') { requireBio = parsed.requireBio; setStored('st-reqBio', requireBio); reqBioToggle.checked = requireBio; }
+            if (typeof parsed.verifiedOnly === 'boolean') { verifiedOnly = parsed.verifiedOnly; setStored('st-verifiedOnly', verifiedOnly); verifiedOnlyToggle.checked = verifiedOnly; }
+            if (typeof parsed.humanCooldowns === 'boolean') { humanCooldowns = parsed.humanCooldowns; setStored('st-cooldowns', humanCooldowns); cooldownToggle.checked = humanCooldowns; }
+
+            renderKeywords();
+            statusEl.textContent = 'Preset configuration imported successfully! ✨';
+            modalContainer.style.display = 'none';
+          } catch (err) {
+            alert('Invalid JSON configuration format.');
+          }
+        };
+      } else {
+        modalActionBtn.textContent = 'Copy to Clipboard';
+        modalActionBtn.onclick = () => {
+          modalTextarea.select();
+          document.execCommand('copy');
+          modalActionBtn.textContent = 'Copied! ✓';
+          setTimeout(() => { modalContainer.style.display = 'none'; }, 1000);
+        };
+      }
+    }
+
+    exportBtn.addEventListener('click', () => {
+      const config = {
+        version: 2,
+        speed,
+        randDelay,
+        maxSwipesPerCat,
+        passRate,
+        maxDistance,
+        minAge,
+        maxAge,
+        requireBio,
+        verifiedOnly,
+        humanCooldowns,
+        autoLoop,
+        savedKeywords,
+        enabledCats
+      };
+      showConfigModal('Exported Preset (Copy Below):', JSON.stringify(config, null, 2), false);
+    });
+
+    importBtn.addEventListener('click', () => {
+      showConfigModal('Import Preset (Paste JSON Below):', '', true);
+    });
+
+    modalCloseBtn.addEventListener('click', () => { modalContainer.style.display = 'none'; });
+    modalCancelBtn.addEventListener('click', () => { modalContainer.style.display = 'none'; });
+
     // --- 6. Render Categories ---
     function renderCategories() {
       catList.innerHTML = '';
@@ -702,8 +905,11 @@
 
     // --- 8. Modal & Popup Auto-Dismisser ---
     function dismissPopups() {
-      // 1. Press Escape to close overlay dialogs
-      dispatchKey('Escape', 'Escape', 27);
+      // Only press Escape if an actual overlay / modal is currently present in the DOM
+      const modal = document.querySelector('[role="dialog"], [role="alertdialog"], .modal, div[class*="overlay" i]');
+      if (modal && !modal.closest('#st-wrapper')) {
+        dispatchKey('Escape', 'Escape', 27);
+      }
 
       let dismissed = false;
       const buttons = Array.from(document.querySelectorAll('button, a, div[role="button"]'));
@@ -720,6 +926,7 @@
       ];
 
       for (const btn of buttons) {
+        if (btn.closest('#st-wrapper')) continue;
         const text = (btn.innerText || '').trim();
         const aria = (btn.getAttribute('aria-label') || '').trim();
 
@@ -739,32 +946,243 @@
 
     // --- 9. Multi-Language Paywall Detection ---
     function checkPaywall() {
-      const text = (document.body.innerText || '').toLowerCase();
-      // English & German paywall and out-of-likes strings
+      const text = getCleanProfileText().toLowerCase();
       const isEnglishPaywall = text.includes('out of likes') && (text.includes('get tinder') || text.includes('unlimited likes'));
       const isGermanPaywall = (text.includes('keine likes mehr') || text.includes('keine likes')) && (text.includes('hol dir tinder') || text.includes('unbegrenzt likes') || text.includes('mehr likes'));
       return isEnglishPaywall || isGermanPaywall;
     }
 
-    // --- 10. Profile Criteria Evaluator ---
+    // --- 10. Clean Profile Extraction & Criteria Evaluator ---
     function escapeRegExp(string) {
       return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
-    function evaluateProfileCriteria() {
-      // Find visible card container
-      const card = document.querySelector('.recCard') ||
-                   document.querySelector('div[aria-hidden="false"]') ||
-                   document.querySelector('#main-content') ||
-                   document.body;
+    function getCleanProfileContainer() {
+      const selectors = [
+        '[data-testid="recs-card"]',
+        '[data-testid="rec-card"]',
+        '.recsCardboard__card',
+        '.recCard',
+        'div[aria-label*="Profile" i]',
+        'div[aria-hidden="false"] div[role="img"]',
+        'div[role="main"]',
+        '#main-content',
+        'main'
+      ];
+      for (const sel of selectors) {
+        const els = document.querySelectorAll(sel);
+        for (const el of els) {
+          if (!el.closest('#st-wrapper')) {
+            return el;
+          }
+        }
+      }
+      return null;
+    }
 
-      const profileText = (card ? card.innerText : document.body.innerText) || '';
+    function extractProfileDetails(card) {
+      if (!card) return { name: '', age: 0, bio: '', isVerified: false };
+
+      // 1. Name & age header
+      const nameEl = card.querySelector('h1, span[itemprop="name"], [data-testid="rec-name"]') || card.querySelector('h1');
+      let name = '';
+      let age = 0;
+      if (nameEl) {
+        const rawText = (nameEl.innerText || '').trim();
+        const m = rawText.match(/^([^\d,]+)[,\s]+(\d+)/i) || rawText.match(/(\d{2})/);
+        if (m) {
+          if (m.length === 3) {
+            name = m[1].trim();
+            age = parseInt(m[2], 10);
+          } else if (m.length === 2) {
+            age = parseInt(m[1], 10);
+            name = rawText.replace(/\d+/g, '').replace(/,/g, '').trim();
+          }
+        } else {
+          name = rawText;
+        }
+      }
+
+      // 2. Verified status
+      const isVerified = Boolean(
+        card.querySelector('[aria-label*="Verified" i]') ||
+        card.querySelector('[aria-label*="Verifiziert" i]') ||
+        card.querySelector('svg[aria-label*="Verified" i]') ||
+        card.querySelector('svg[aria-label*="Verifiziert" i]') ||
+        card.querySelector('[title*="Verified" i]') ||
+        card.querySelector('[data-testid="verified-badge"]') ||
+        card.querySelector('.badge-verified')
+      );
+
+      // 3. Bio text (clean clone without name and HUD)
+      const clone = card.cloneNode(true);
+      const hudInClone = clone.querySelector('#st-wrapper');
+      if (hudInClone) hudInClone.remove();
+      const nameInClone = clone.querySelector('h1, span[itemprop="name"], [data-testid="rec-name"]');
+      if (nameInClone) nameInClone.remove();
+
+      const bio = (clone.innerText || '').replace(/\s+/g, ' ').trim();
+
+      return { name, age, bio, isVerified };
+    }
+
+    function getCleanProfileSignature() {
+      const card = getCleanProfileContainer();
+      if (!card) return '';
+
+      const nameEl = card.querySelector('h1, span[itemprop="name"], [data-testid="rec-name"]') || card.querySelector('h1');
+      const nameText = nameEl ? (nameEl.innerText || '').trim() : '';
+
+      const imgEl = card.querySelector('img') || card.querySelector('div[style*="background-image"]');
+      const imgSrc = imgEl ? (imgEl.getAttribute('src') || imgEl.style.backgroundImage || '') : '';
+
+      const clone = card.cloneNode(true);
+      const hudInClone = clone.querySelector('#st-wrapper');
+      if (hudInClone) hudInClone.remove();
+      const text = (clone.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+
+      return `${nameText}|${imgSrc.slice(-50)}|${text}`;
+    }
+
+    function getCleanProfileText() {
+      const card = getCleanProfileContainer();
+      if (card) {
+        const clone = card.cloneNode(true);
+        const hudInClone = clone.querySelector('#st-wrapper');
+        if (hudInClone) hudInClone.remove();
+        return clone.innerText || '';
+      }
+
+      const wrapperEl = document.getElementById('st-wrapper');
+      let text = '';
+      for (const child of document.body.children) {
+        if (child.id !== 'st-wrapper' && (!wrapperEl || !child.contains(wrapperEl))) {
+          text += ' ' + (child.innerText || '');
+        }
+      }
+      return text.trim();
+    }
+
+    // Visual neon card glow feedback
+    function applyCardGlow(action) {
+      const card = getCleanProfileContainer();
+      if (!card) return;
+      card.style.transition = 'box-shadow 0.2s ease, outline 0.2s ease';
+      if (action === 'LIKE') {
+        card.style.boxShadow = '0 0 28px rgba(74, 222, 128, 0.7)';
+        card.style.outline = '2px solid #4ade80';
+      } else {
+        card.style.boxShadow = '0 0 28px rgba(248, 113, 113, 0.7)';
+        card.style.outline = '2px solid #f87171';
+      }
+      setTimeout(() => {
+        if (card) {
+          card.style.boxShadow = '';
+          card.style.outline = '';
+        }
+      }, 350);
+    }
+
+    // Live Activity Feed Logger
+    function addActivityLog(action, name, age, reason) {
+      const now = new Date();
+      const time = now.toTimeString().split(' ')[0];
+      const displayLabel = name ? (age ? `${name}, ${age}` : name) : 'Profile';
+      activityLog.unshift({ action, label: displayLabel, reason, time });
+      if (activityLog.length > 10) activityLog.pop();
+      renderActivityFeed();
+    }
+
+    function renderActivityFeed() {
+      if (!feedListEl) return;
+      if (activityLog.length === 0) {
+        feedListEl.innerHTML = '<span style="color: rgba(255,255,255,0.3); font-style: italic;">No decisions logged yet</span>';
+        return;
+      }
+      feedListEl.innerHTML = activityLog.map(item => {
+        const isLike = item.action === 'LIKE';
+        const badgeColor = isLike ? '#4ade80' : '#f87171';
+        const badgeIcon = isLike ? '✓' : '✗';
+        return `
+          <div style="display: flex; align-items: baseline; justify-content: space-between; font-size: 9px; line-height: 1.2; padding: 2px 4px; background: rgba(255,255,255,0.03); border-radius: 4px;">
+            <div style="display: flex; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 195px;">
+              <span style="color: ${badgeColor}; font-weight: bold; font-size: 8px;">${badgeIcon}</span>
+              <span style="font-weight: 700; color: #fff;">${item.label}</span>
+              <span style="color: rgba(255,255,255,0.5); font-size: 8px;">${item.reason}</span>
+            </div>
+            <span style="color: rgba(255,255,255,0.3); font-size: 8px; flex-shrink: 0;">${item.time}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Cooldown Break System
+    function triggerCooldownBreak() {
+      if (!isLiking) return;
+      isBreakActive = true;
+      if (activeTimeoutId) clearTimeout(activeTimeoutId);
+
+      let secondsLeft = Math.floor(Math.random() * 21) + 40; // 40 - 60s
+      statusEl.textContent = `☕ Taking break (${secondsLeft}s)...`;
+      skipBreakBtn.style.display = 'inline-block';
+
+      breakTimerId = setInterval(() => {
+        if (!isLiking || !isBreakActive) {
+          clearInterval(breakTimerId);
+          skipBreakBtn.style.display = 'none';
+          return;
+        }
+        secondsLeft--;
+        if (secondsLeft <= 0) {
+          clearInterval(breakTimerId);
+          isBreakActive = false;
+          skipBreakBtn.style.display = 'none';
+          statusEl.textContent = 'Break finished. Resuming...';
+          activeTimeoutId = setTimeout(performSwipe, 1000);
+        } else {
+          statusEl.textContent = `☕ Taking break (${secondsLeft}s)...`;
+        }
+      }, 1000);
+    }
+
+    function skipCooldownBreak() {
+      if (breakTimerId) clearInterval(breakTimerId);
+      isBreakActive = false;
+      skipBreakBtn.style.display = 'none';
+      statusEl.textContent = 'Break skipped. Resuming...';
+      activeTimeoutId = setTimeout(performSwipe, 800);
+    }
+
+    function evaluateProfileCriteria() {
+      const card = getCleanProfileContainer();
+      const details = extractProfileDetails(card);
+      const profileText = getCleanProfileText();
       const lowerText = profileText.toLowerCase();
 
-      // Track profile identifier (first 100 chars) to detect card change
-      lastProfileIdentifier = profileText.slice(0, 100);
+      // Record profile signature for change detection
+      lastProfileIdentifier = getCleanProfileSignature();
 
-      // A. Check Negative Keywords / Blacklist (pronouns, identity tags, terms)
+      // A. Verified Only Check
+      if (verifiedOnly && !details.isVerified) {
+        return { action: 'PASS', reason: 'Unverified Profile', name: details.name, age: details.age };
+      }
+
+      // B. Age Range Limits Check
+      if (details.age > 0) {
+        if (minAge > 0 && details.age < minAge) {
+          return { action: 'PASS', reason: `Age: ${details.age} < ${minAge} min`, name: details.name, age: details.age };
+        }
+        if (maxAge > 0 && details.age > maxAge) {
+          return { action: 'PASS', reason: `Age: ${details.age} > ${maxAge} max`, name: details.name, age: details.age };
+        }
+      }
+
+      // C. Bio Required Check
+      if (requireBio && details.bio.length < 6) {
+        return { action: 'PASS', reason: 'Bio Required (empty bio)', name: details.name, age: details.age };
+      }
+
+      // D. Check Negative Keywords / Blacklist (pronouns, identity tags, terms)
       for (const kw of savedKeywords) {
         const cleanKw = kw.trim().toLowerCase();
         if (!cleanKw) continue;
@@ -776,28 +1194,28 @@
           : lowerText.includes(cleanKw);
 
         if (matched) {
-          return { action: 'PASS', reason: `Negative Criteria: "${kw}"` };
+          return { action: 'PASS', reason: `Negative: "${kw}"`, name: details.name, age: details.age };
         }
       }
 
-      // B. Check Max Distance
+      // E. Check Max Distance
       if (maxDistance > 0) {
         const distMatch = lowerText.match(/(\d+)\s*(km|kilometers|miles|meilen)\s*(away|entfernt)?/i);
         if (distMatch) {
           const dist = parseInt(distMatch[1], 10);
           if (dist > maxDistance) {
-            return { action: 'PASS', reason: `Distance: ${dist}km > ${maxDistance}km` };
+            return { action: 'PASS', reason: `Distance: ${dist}km > ${maxDistance}km`, name: details.name, age: details.age };
           }
         }
       }
 
-      // C. Random Pass Rate (if user set passRate > 0)
+      // F. Random Pass Rate (if user set passRate > 0)
       if (passRate > 0 && Math.random() * 100 < passRate) {
-        return { action: 'PASS', reason: `Random Pass (${passRate}%)` };
+        return { action: 'PASS', reason: `Random Pass (${passRate}%)`, name: details.name, age: details.age };
       }
 
-      // D. All criteria passed -> LIKE
-      return { action: 'LIKE', reason: 'Passed criteria' };
+      // G. All criteria passed -> LIKE
+      return { action: 'LIKE', reason: 'Passed criteria', name: details.name, age: details.age };
     }
 
     // --- 11. Key & Action Dispatchers ---
@@ -806,14 +1224,14 @@
       const down = new KeyboardEvent('keydown', opts);
       const up = new KeyboardEvent('keyup', opts);
 
-      if (document.activeElement && document.activeElement !== document.body) {
+      if (document.activeElement && document.activeElement !== document.body && !document.activeElement.closest('#st-wrapper')) {
         document.activeElement.dispatchEvent(down);
       }
       document.body.dispatchEvent(down);
       window.dispatchEvent(down);
 
       setTimeout(() => {
-        if (document.activeElement && document.activeElement !== document.body) {
+        if (document.activeElement && document.activeElement !== document.body && !document.activeElement.closest('#st-wrapper')) {
           document.activeElement.dispatchEvent(up);
         }
         document.body.dispatchEvent(up);
@@ -830,26 +1248,64 @@
     }
 
     function clickLikeButtonFallback() {
-      const likeBtn = document.querySelector('button[aria-label*="Like" i]') ||
-                      document.querySelector('button[aria-label*="Gefällt mir" i]') ||
-                      document.querySelector('.button[aria-label*="Like" i]');
-      if (likeBtn) {
-        try { likeBtn.click(); } catch (e) {}
+      const selectors = [
+        'button[aria-label*="Like" i]',
+        'button[aria-label*="Gefällt mir" i]',
+        'button[data-testid="gamepad-like"]',
+        '.button[aria-label*="Like" i]'
+      ];
+      for (const sel of selectors) {
+        const btn = document.querySelector(sel);
+        if (btn && !btn.closest('#st-wrapper')) {
+          try { btn.click(); return true; } catch (e) {}
+        }
       }
+      return false;
     }
 
     function clickPassButtonFallback() {
-      const passBtn = document.querySelector('button[aria-label*="Nope" i]') ||
-                      document.querySelector('button[aria-label*="Pass" i]') ||
-                      document.querySelector('button[aria-label*="Nicht" i]');
-      if (passBtn) {
-        try { passBtn.click(); } catch (e) {}
+      const selectors = [
+        'button[aria-label*="Nope" i]',
+        'button[aria-label*="Pass" i]',
+        'button[aria-label*="Nicht" i]',
+        'button[data-testid="gamepad-pass"]'
+      ];
+      for (const sel of selectors) {
+        const btn = document.querySelector(sel);
+        if (btn && !btn.closest('#st-wrapper')) {
+          try { btn.click(); return true; } catch (e) {}
+        }
       }
+      return false;
+    }
+
+    // --- Strict Empty Stack Verifier ---
+    function isStackGenuinelyEmpty() {
+      // 1. If a profile card signature exists, the stack is definitely NOT empty!
+      const sig = getCleanProfileSignature();
+      if (sig && sig.length > 5) {
+        return false;
+      }
+
+      // 2. Check if Tinder's beacon / radar animation is visible
+      const isBeaconActive = document.querySelector('.beacon') !== null ||
+                             document.querySelector('div[class*="beacon" i]') !== null ||
+                             document.querySelector('[data-testid="radar"]') !== null;
+
+      // 3. Check for specific empty stack messages (clean text only, exact phrasing)
+      const pageText = getCleanProfileText().toLowerCase();
+      const hasEmptyText = pageText.includes("there's no one new around you") ||
+                           pageText.includes("there's no one new") ||
+                           pageText.includes("niemanden neues in deiner umgebung") ||
+                           pageText.includes("es gibt niemanden neues") ||
+                           pageText.includes("out of potential matches");
+
+      return isBeaconActive || hasEmptyText;
     }
 
     // --- 12. Swiping Automation Loop ---
-    function performSwipe() {
-      if (!isLiking) return;
+    async function performSwipe() {
+      if (!isLiking || isBreakActive) return;
 
       // Check paywall
       if (checkPaywall()) {
@@ -861,15 +1317,8 @@
       // Dismiss any interfering popups
       dismissPopups();
 
-      // Check for empty stack / beacon radar
-      const isBeaconActive = document.querySelector('.beacon') !== null ||
-                             document.querySelector('div[class*="beacon" i]') !== null;
-      const pageText = (document.body.innerText || '').toLowerCase();
-      const isStackEmptyText = pageText.includes("there's no one new") ||
-                               pageText.includes("niemanden neues") ||
-                               pageText.includes("looking for people");
-
-      if (isBeaconActive || isStackEmptyText) {
+      // Check if stack is genuinely empty
+      if (isStackGenuinelyEmpty()) {
         emptySwipeCount++;
         statusEl.textContent = `Looking for profiles (${emptySwipeCount}/3)...`;
         if (emptySwipeCount >= 3) {
@@ -880,10 +1329,20 @@
         scheduleNextSwipe(1500);
         return;
       }
+      emptySwipeCount = 0;
+
+      // Micro-inspection simulation (15% chance to view next photo briefly before deciding)
+      if (Math.random() < 0.15) {
+        dispatchKey('Space', 'Space', 32);
+        await new Promise(r => setTimeout(r, 450 + Math.random() * 250));
+      }
 
       // Evaluate profile against criteria
       const decision = evaluateProfileCriteria();
       const wasLike = decision.action === 'LIKE';
+
+      // Visual feedback: apply neon card glow
+      applyCardGlow(decision.action);
 
       if (wasLike) {
         triggerLike();
@@ -895,23 +1354,23 @@
       setTimeout(() => {
         if (!isLiking) return;
 
-        let currentProfileText = ((document.querySelector('.recCard') || document.body).innerText || '').slice(0, 100);
-        let cardMoved = (currentProfileText !== lastProfileIdentifier) && (lastProfileIdentifier !== '');
+        let currentSig = getCleanProfileSignature();
+        let cardMoved = (currentSig !== lastProfileIdentifier) && (lastProfileIdentifier !== '');
 
         if (!cardMoved) {
           if (wasLike) clickLikeButtonFallback();
           else clickPassButtonFallback();
         }
 
-        // Wait another 350ms to allow card animation / transition to complete
+        // Wait another 350ms to allow card animation / DOM replacement to complete
         setTimeout(() => {
           if (!isLiking) return;
 
-          currentProfileText = ((document.querySelector('.recCard') || document.body).innerText || '').slice(0, 100);
-          cardMoved = (currentProfileText !== lastProfileIdentifier) && (lastProfileIdentifier !== '');
+          currentSig = getCleanProfileSignature();
+          cardMoved = (currentSig !== lastProfileIdentifier) && (lastProfileIdentifier !== '');
 
           if (cardMoved) {
-            emptySwipeCount = 0;
+            consecutiveMissedCardCount = 0;
             if (wasLike) {
               likeCount++;
               sessionStorage.setItem('st-likeCount', likeCount);
@@ -930,8 +1389,23 @@
 
             statusEl.textContent = wasLike ? `Liked (${decision.reason})` : `Passed (${decision.reason})`;
 
-            // Check category limit
-            if (currentCategorySwipes >= maxSwipesPerCat && enabledCats.length > 1) {
+            // Record to live activity feed
+            addActivityLog(decision.action, decision.name, decision.age, decision.reason);
+
+            // Check human cooldown break
+            if (humanCooldowns) {
+              swipesSinceBreak++;
+              if (swipesSinceBreak >= currentBreakTarget) {
+                swipesSinceBreak = 0;
+                currentBreakTarget = Math.floor(Math.random() * 11) + 20;
+                triggerCooldownBreak();
+                return;
+              }
+            }
+
+            // Check category limit (only switch if multiple categories exist in queue/loop)
+            const hasMultipleCategories = enabledCats.length > 1 || currentQueue.length > 1;
+            if (currentCategorySwipes >= maxSwipesPerCat && hasMultipleCategories) {
               currentCategorySwipes = 0;
               sessionStorage.setItem('st-catSwipes', '0');
               statusEl.textContent = 'Category limit reached. Switching...';
@@ -939,11 +1413,21 @@
               return;
             }
           } else {
-            emptySwipeCount++;
-            if (emptySwipeCount >= 3) {
-              emptySwipeCount = 0;
-              handleEndOfStack('empty');
-              return;
+            // Card didn't change: could be slow network, unresponsiveness, or stack just ran empty
+            consecutiveMissedCardCount++;
+            if (isStackGenuinelyEmpty()) {
+              emptySwipeCount++;
+              if (emptySwipeCount >= 3) {
+                emptySwipeCount = 0;
+                handleEndOfStack('empty');
+                return;
+              }
+            } else if (consecutiveMissedCardCount >= 4) {
+              consecutiveMissedCardCount = 0;
+              statusEl.textContent = 'Card unmoving. Retrying action...';
+              dismissPopups();
+              if (wasLike) clickLikeButtonFallback();
+              else clickPassButtonFallback();
             }
           }
 
@@ -964,7 +1448,114 @@
       activeTimeoutId = setTimeout(performSwipe, delayMs);
     }
 
-    // --- 13. Queue & Category Switching ---
+    // --- 13. Client-Side SPA Navigation Engine (Zero Page Reloads) ---
+    function clientNavigate(targetPath) {
+      if (window.location.pathname === targetPath) return true;
+
+      let targetLink = null;
+      if (targetPath.includes('/recs')) {
+        targetLink = document.querySelector(
+          'a[href*="/app/recs"], a[href$="/recs"], a[href="/app"], a[aria-label*="Recs" i], a[aria-label*="Matches" i], a[aria-label*="Tinder" i]'
+        );
+      } else if (targetPath.includes('/explore')) {
+        // Back button check if inside a category stack
+        const backBtn = document.querySelector(
+          'button[aria-label*="Back" i], button[aria-label*="Zurück" i], a[aria-label*="Back" i], a[aria-label*="Zurück" i]'
+        );
+        if (backBtn && !backBtn.closest('#st-wrapper')) {
+          backBtn.click();
+          return true;
+        }
+        targetLink = document.querySelector(
+          'a[href*="/app/explore"], a[href$="/explore"], a[aria-label*="Explore" i], a[aria-label*="Entdecken" i]'
+        );
+      } else {
+        targetLink = document.querySelector(`a[href*="${targetPath}"]`);
+      }
+
+      if (targetLink && !targetLink.closest('#st-wrapper')) {
+        try {
+          targetLink.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+          return true;
+        } catch (e) {
+          try { targetLink.click(); return true; } catch (err) {}
+        }
+      }
+
+      // React Router / HTML5 history fallback (never triggers a page reload)
+      try {
+        window.history.pushState(null, '', targetPath);
+        window.dispatchEvent(new PopStateEvent('popstate'));
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function findCategoryTile(catTitle) {
+      const normTitle = catTitle.toLowerCase().trim();
+      const slug = normTitle.replace(/[^a-z0-9]+/g, '-');
+      const candidates = Array.from(document.querySelectorAll('a, button, div[role="button"], div[class*="explore" i]'));
+
+      for (const el of candidates) {
+        if (el.closest('#st-wrapper')) continue;
+
+        // Check href slug
+        const href = (el.getAttribute('href') || '').toLowerCase();
+        if (href && href.includes(slug)) return el;
+
+        // Check headings or text content
+        const heading = el.querySelector('h1, h2, h3, h4, span, div');
+        const text = (heading ? heading.innerText : el.innerText || '').toLowerCase().trim();
+        if (text === normTitle || text.startsWith(normTitle) || (normTitle.length > 4 && text.includes(normTitle))) {
+          return el;
+        }
+      }
+      return null;
+    }
+
+    async function diveIntoCategory(catTitle) {
+      statusEl.textContent = `Opening ${catTitle}...`;
+
+      // Navigate to /app/explore if not already there
+      if (!window.location.pathname.includes('/explore') || window.location.pathname.length > '/app/explore'.length + 1) {
+        clientNavigate('/app/explore');
+        await new Promise(r => setTimeout(r, 1200));
+      }
+
+      // Retry search for tile over several attempts, scrolling if needed
+      let targetBtn = null;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        targetBtn = findCategoryTile(catTitle);
+        if (targetBtn) break;
+
+        // Smooth scroll Explore page to reveal more tiles
+        const scroller = document.querySelector('main') || document.querySelector('#main-content') || window;
+        if (typeof scroller.scrollBy === 'function') {
+          scroller.scrollBy({ top: 300, behavior: 'smooth' });
+        }
+        await new Promise(r => setTimeout(r, 600));
+      }
+
+      if (targetBtn) {
+        try {
+          targetBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          targetBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+        } catch (e) {
+          try { targetBtn.click(); } catch (err) {}
+        }
+
+        statusEl.textContent = `Swiping in ${catTitle}...`;
+        activeTimeoutId = setTimeout(() => {
+          if (isLiking) performSwipe();
+        }, 2500);
+      } else {
+        statusEl.textContent = `Category "${catTitle}" not found in Explore.`;
+        // Delay before moving to next item so user sees status and no rapid-fire loop occurs
+        activeTimeoutId = setTimeout(() => handleEndOfStack('not_found'), 2500);
+      }
+    }
+
     function handleEndOfStack(reason = 'empty') {
       if (!isLiking) return;
       if (activeTimeoutId) clearTimeout(activeTimeoutId);
@@ -985,7 +1576,7 @@
           if (loopHasProfiles) {
             statusEl.textContent = 'Looping categories...';
             loopHasProfiles = false;
-            activeTimeoutId = setTimeout(() => navigateToItem(currentQueue[0]), 3000);
+            activeTimeoutId = setTimeout(() => navigateToItem(currentQueue[0]), 2000);
           } else {
             statusEl.textContent = 'All stacks empty. Waiting 5m...';
             activeTimeoutId = setTimeout(() => navigateToItem(currentQueue[0]), 5 * 60 * 1000);
@@ -997,7 +1588,7 @@
       } else {
         sessionStorage.setItem('st-queue', JSON.stringify(currentQueue));
         statusEl.textContent = `Switching to ${formatQueueName(currentQueue[0])}...`;
-        activeTimeoutId = setTimeout(() => navigateToItem(currentQueue[0]), 2000);
+        activeTimeoutId = setTimeout(() => navigateToItem(currentQueue[0]), 1500);
       }
     }
 
@@ -1007,55 +1598,19 @@
       catProgressEl.textContent = `0 / ${maxSwipesPerCat}`;
 
       if (item === '/app/recs') {
-        const recsLink = document.querySelector('a[href="/app/recs"]');
-        if (recsLink) {
-          recsLink.click();
-          activeTimeoutId = setTimeout(() => {
-            if (isLiking) performSwipe();
-          }, 3000);
-        } else {
-          window.location.href = item;
-        }
+        statusEl.textContent = 'Navigating to Normal Recs...';
+        clientNavigate('/app/recs');
+        activeTimeoutId = setTimeout(() => {
+          if (isLiking) {
+            statusEl.textContent = 'Swiping in Normal Recs...';
+            performSwipe();
+          }
+        }, 2200);
         return;
       }
 
-      // It is an Explore category tile
-      const isCurrentlyExploreRoot = window.location.pathname === '/app/explore';
-      if (!isCurrentlyExploreRoot) {
-        sessionStorage.setItem('st-targetCat', item);
-        const exploreLink = document.querySelector('a[href="/app/explore"]');
-        if (exploreLink) {
-          exploreLink.click();
-          activeTimeoutId = setTimeout(() => diveIntoCategory(item), 3000);
-        } else {
-          window.location.href = '/app/explore';
-        }
-      } else {
-        diveIntoCategory(item);
-      }
-    }
-
-    function diveIntoCategory(catTitle) {
-      statusEl.textContent = `Opening ${catTitle}...`;
-      const buttons = Array.from(document.querySelectorAll('button, a, div[role="button"]'));
-      const targetBtn = buttons.find(b => {
-        const heading = b.querySelector('h3, h2, span');
-        const text = heading ? heading.innerText.trim() : b.innerText.trim();
-        return text === catTitle;
-      });
-
-      if (targetBtn) {
-        targetBtn.click();
-        activeTimeoutId = setTimeout(() => {
-          if (isLiking) {
-            statusEl.textContent = `Swiping in ${catTitle}...`;
-            performSwipe();
-          }
-        }, 4000);
-      } else {
-        statusEl.textContent = `Category "${catTitle}" not found.`;
-        activeTimeoutId = setTimeout(handleEndOfStack, 2500);
-      }
+      // Explore category
+      diveIntoCategory(item);
     }
 
     // --- 14. Explore Page Auto-Scanner ---
@@ -1065,10 +1620,11 @@
       let newCats = [];
 
       elements.forEach(el => {
-        const heading = el.querySelector('h3, h2');
+        if (el.closest('#st-wrapper')) return;
+        const heading = el.querySelector('h3, h2, h1');
         if (heading && heading.innerText) {
           const title = heading.innerText.trim();
-          if (title.length > 2 && !newCats.includes(title)) {
+          if (title.length > 2 && !newCats.includes(title) && !title.toLowerCase().includes('smart tinder')) {
             newCats.push(title);
           }
         }
@@ -1084,26 +1640,14 @@
       }
     }
 
-    scanBtn.addEventListener('click', () => {
+    scanBtn.addEventListener('click', async () => {
       if (!window.location.pathname.includes('/explore')) {
         statusEl.textContent = 'Navigating to Explore...';
-        sessionStorage.setItem('st-autoScan', 'true');
-        const exploreLink = document.querySelector('a[href="/app/explore"]');
-        if (exploreLink) {
-          exploreLink.click();
-          setTimeout(runAutoScan, 3000);
-        } else {
-          window.location.href = '/app/explore';
-        }
-        return;
+        clientNavigate('/app/explore');
+        await new Promise(r => setTimeout(r, 2000));
       }
       runAutoScan();
     });
-
-    if (sessionStorage.getItem('st-autoScan') === 'true') {
-      sessionStorage.removeItem('st-autoScan');
-      setTimeout(runAutoScan, 3500);
-    }
 
     // --- 15. Start & Stop Controls ---
     function startAutomation() {
@@ -1119,10 +1663,10 @@
         updateQueueVisuals();
 
         const firstItem = currentQueue[0];
-        if (firstItem === '/app/recs' && window.location.pathname !== '/app/recs') {
+        if (firstItem === '/app/recs' && !window.location.pathname.includes('/recs')) {
           navigateToItem(firstItem);
           return;
-        } else if (firstItem !== '/app/recs' && window.location.pathname !== '/app/explore') {
+        } else if (firstItem !== '/app/recs' && !window.location.pathname.includes('/explore')) {
           navigateToItem(firstItem);
           return;
         }
@@ -1139,10 +1683,11 @@
 
       compactToggleRun.textContent = '⏸️';
       emptySwipeCount = 0;
+      consecutiveMissedCardCount = 0;
       statusEl.textContent = 'Starting swiping engine...';
       updateQueueVisuals();
 
-      activeTimeoutId = setTimeout(performSwipe, 1800);
+      activeTimeoutId = setTimeout(performSwipe, 1500);
     }
 
     function stopAutomation() {
@@ -1169,16 +1714,11 @@
     startBtn.addEventListener('click', startAutomation);
     stopBtn.addEventListener('click', stopAutomation);
 
-    // --- 16. Category Dive on Page Reload ---
-    const pendingCat = sessionStorage.getItem('st-targetCat');
-    if (pendingCat) {
-      sessionStorage.removeItem('st-targetCat');
-      setTimeout(() => diveIntoCategory(pendingCat), 3500);
-    } else if (isLiking) {
-      // Auto-resume swiping if was active prior to reload
+    // Auto-resume swiping if was active prior to session start
+    if (isLiking) {
       setTimeout(() => {
         if (isLiking) performSwipe();
-      }, 3000);
+      }, 2000);
     }
   }
 
